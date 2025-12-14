@@ -1231,8 +1231,8 @@ export function SWPCalculator({
             !purchaseDate ||
             !swpStartDate ||
             !endDate ||
-            totalInvestment <= 0 ||
-            funds.length === 0
+            funds.length === 0 ||
+            (mode === 'TARGET' ? desiredWithdrawal <= 0 : totalInvestment <= 0)
           }
           className="w-full mt-6"
         >
