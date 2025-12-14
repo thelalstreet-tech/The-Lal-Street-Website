@@ -1232,9 +1232,19 @@ export function SWPCalculator({
             !swpStartDate ||
             !endDate ||
             funds.length === 0 ||
-            (mode === 'TARGET' ? desiredWithdrawal <= 0 : totalInvestment <= 0)
+            (mode === 'TARGET' ? (desiredWithdrawal <= 0 || isNaN(desiredWithdrawal)) : totalInvestment <= 0)
           }
           className="w-full mt-6"
+          title={
+            isLoading ? 'Calculating...' :
+            !purchaseDate ? 'Please select Investment Date' :
+            !swpStartDate ? 'Please select SWP Start Date' :
+            !endDate ? 'Please select End Date' :
+            funds.length === 0 ? 'Please select at least one fund' :
+            mode === 'TARGET' && (desiredWithdrawal <= 0 || isNaN(desiredWithdrawal)) ? 'Please enter desired withdrawal amount' :
+            mode !== 'TARGET' && totalInvestment <= 0 ? 'Please enter total investment amount' :
+            'Click to run simulation'
+          }
         >
           {isLoading ? 'Simulating...' : 'Run SWP Simulation'}
               </Button>
