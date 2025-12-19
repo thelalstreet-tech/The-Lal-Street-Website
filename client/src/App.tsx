@@ -9,6 +9,9 @@ import { Footer } from './components/Footer';
 import type { Bucket } from './types/bucket';
 import type { SuggestedBucket } from './types/suggestedBucket';
 
+// A little christmas update 
+import SnowFall from 'react-snowfall';
+
 export interface Fund {
   id: string;
   name: string;
@@ -230,6 +233,12 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
+
+      <SnowFall
+        snowflakeCount={80}
+        style={{ position: 'fixed', width: '100%', height: '100%', zIndex: 1 }}
+      />
+
       <Navigation 
         activePage={activePage} 
         onNavigate={handleNavigate}
