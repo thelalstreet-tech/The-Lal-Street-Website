@@ -15,8 +15,17 @@ const authenticateToken = async (req, res, next) => {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
+      logger.debug('Token found in Authorization header');
     } else if (req.cookies && req.cookies.accessToken) {
       token = req.cookies.accessToken;
+      logger.debug('Token found in cookie');
+    } else {
+      logger.warn('No token found in request', {
+        hasAuthHeader: !!authHeader,
+        hasCookies: !!req.cookies,
+        cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
+        allHeaders: Object.keys(req.headers)
+      });
     }
 
     if (!token) {

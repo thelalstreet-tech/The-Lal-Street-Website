@@ -133,6 +133,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
     const oauthSuccess = urlParams.get('oauth_success');
+    const token = urlParams.get('token'); // Token passed in URL as fallback
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     
@@ -148,7 +149,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const isOAuthCallback = oauthSuccess === 'true' || code || state;
     
     if (isOAuthCallback) {
-      logger.log('OAuth callback detected:', { oauthSuccess, code: !!code, state: !!state });
+      logger.log('OAuth callback detected:', { oauthSuccess, code: !!code, state: !!state, hasToken: !!token });
+      
+      // If token is in URL (fallback for cross-domain cookie issues), store it temporarily
+      if (token) {
+        logger.log('Token found in URL, storing temporarily...');
+        // Store token in localStorage as fallback
+        localStorage.setItem('accessToken', token);
+        // Clean URL immediately to remove token
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      
       logger.log('Fetching user with credentials...');
       
       // Function to fetch user with retries

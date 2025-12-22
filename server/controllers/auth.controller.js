@@ -266,12 +266,20 @@ const googleCallback = async (req, res) => {
     // Set tokens in httpOnly cookies (most secure - tokens never exposed to JavaScript)
     // Use sameSite: 'none' in production for cross-site redirects (Google OAuth)
     const isProduction = process.env.NODE_ENV === 'production';
+    
+    // Determine cookie domain - if frontend and backend are on different domains,
+    // we need to set domain explicitly or use a shared parent domain
+    // For now, don't set domain (cookies will be set on current domain)
+    // If frontend and backend share a parent domain (e.g., .example.com), set domain to parent
+    const cookieDomain = process.env.COOKIE_DOMAIN || undefined; // e.g., '.thelalstreet.com' for subdomains
+    
     const cookieOptions = {
       httpOnly: true, // Prevents JavaScript access (XSS protection)
       secure: isProduction, // HTTPS only in production (required for sameSite: 'none')
       sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site redirects in production
       maxAge: 15 * 60 * 1000, // 15 minutes (matches access token expiry)
-      path: '/' // Root path so cookie is accessible everywhere
+      path: '/', // Root path so cookie is accessible everywhere
+      domain: cookieDomain // Set if frontend and backend share a parent domain
     };
 
     const refreshCookieOptions = {
@@ -279,14 +287,23 @@ const googleCallback = async (req, res) => {
       secure: isProduction,
       sameSite: isProduction ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches refresh token expiry)
-      path: '/'
+      path: '/',
+      domain: cookieDomain
     };
 
     res.cookie('accessToken', accessToken, cookieOptions);
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
+    
+    logger.info('Cookies set with options:', {
+      domain: cookieDomain || 'current domain',
+      sameSite: cookieOptions.sameSite,
+      secure: cookieOptions.secure,
+      path: cookieOptions.path
+    });
 
     logger.info(`✅ Google OAuth login successful for: ${user.email}`);
     logger.info('Cookie settings:', {
+      domain: cookieDomain || 'current domain',
       sameSite: cookieOptions.sameSite,
       secure: cookieOptions.secure,
       path: cookieOptions.path
@@ -294,9 +311,23 @@ const googleCallback = async (req, res) => {
     logger.info('=== googleCallback Controller SUCCESS ===');
 
     // Redirect to frontend with success parameter so frontend knows login succeeded
-    // Frontend will detect this and fetch user info
+    // Also include token in URL temporarily (will be removed by frontend) as fallback
+    // This is a workaround for cross-domain cookie issues
+    // Frontend will extract token, store it, and clean URL
     const frontendUrl = getSafeFrontendUrl();
-    res.redirect(`${frontendUrl}?oauth_success=true`);
+    
+    // For cross-domain scenarios, pass token in URL as temporary measure
+    // Frontend will extract it and make authenticated request
+    // This is less secure but works when cookies don't work across domains
+    const redirectUrl = `${frontendUrl}?oauth_success=true&token=${accessToken}`;
+    
+    logger.info('Redirecting to frontend:', {
+      frontendUrl,
+      hasToken: !!accessToken,
+      tokenLength: accessToken?.length
+    });
+    
+    res.redirect(redirectUrl);
   } catch (error) {
     logger.error('=== googleCallback Controller ERROR ===');
     logger.error('Google OAuth callback error:', error.message);
