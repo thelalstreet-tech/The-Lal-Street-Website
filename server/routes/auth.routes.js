@@ -130,6 +130,7 @@ if (googleOAuthConfigured) {
     passReqToCallback: false
   }, async (accessToken, refreshToken, profile, done) => {
     try {
+      logger.info('=== Google OAuth Strategy Callback START ===');
       logger.info('Google OAuth profile received:', {
         id: profile.id,
         email: profile.emails?.[0]?.value,
@@ -137,6 +138,18 @@ if (googleOAuthConfigured) {
         hasPhotos: !!profile.photos?.[0]?.value
       });
       
+      // Check database connection
+      const mongoose = require('mongoose');
+      const dbState = mongoose.connection.readyState;
+      logger.info('Database connection state:', dbState, '(1=connected, 2=connecting, 0=disconnected)');
+      
+      if (dbState !== 1) {
+        const error = new Error(`Database not connected. Connection state: ${dbState}`);
+        logger.error('Database not connected when trying to create user');
+        return done(error, null);
+      }
+      
+      logger.info('Calling User.findOrCreateGoogleUser...');
       const user = await User.findOrCreateGoogleUser(profile);
       
       if (!user) {
@@ -144,10 +157,15 @@ if (googleOAuthConfigured) {
         return done(new Error('Failed to create or find user'), null);
       }
       
-      logger.info(`User successfully created/found: ${user.email} (ID: ${user._id})`);
+      logger.info(`✅ User successfully created/found: ${user.email} (ID: ${user._id})`);
+      logger.info('=== Google OAuth Strategy Callback SUCCESS ===');
       return done(null, user);
     } catch (error) {
+      logger.error('=== Google OAuth Strategy Callback ERROR ===');
       logger.error('Google OAuth user creation error:', error);
+      logger.error('Error name:', error.name);
+      logger.error('Error message:', error.message);
+      logger.error('Error code:', error.code);
       logger.error('Error stack:', error.stack);
       logger.error('Profile data:', {
         id: profile?.id,

@@ -89,6 +89,22 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 // Static method to find or create user from Google profile
 userSchema.statics.findOrCreateGoogleUser = async function(profile) {
   try {
+    console.log('=== findOrCreateGoogleUser START ===');
+    console.log('Profile received:', {
+      id: profile?.id,
+      email: profile?.emails?.[0]?.value,
+      displayName: profile?.displayName,
+      hasPhotos: !!profile?.photos?.[0]?.value
+    });
+    
+    // Check database connection
+    const dbState = mongoose.connection.readyState;
+    console.log('Database connection state:', dbState, '(1=connected, 2=connecting, 0=disconnected)');
+    
+    if (dbState !== 1) {
+      throw new Error(`Database not connected. Connection state: ${dbState}`);
+    }
+    
     // Validate profile data
     if (!profile || !profile.id) {
       throw new Error('Invalid Google profile: missing id');
@@ -106,34 +122,41 @@ userSchema.statics.findOrCreateGoogleUser = async function(profile) {
       throw new Error(`Invalid email format from Google profile: ${email}`);
     }
     
+    console.log('Searching for user by googleId:', profile.id);
     // Try to find user by googleId
     let user = await this.findOne({ googleId: profile.id });
     
     if (user) {
+      console.log('Found existing user by googleId:', user.email);
       // Update last login and picture if changed
       user.lastLoginAt = new Date();
       if (profile.photos && profile.photos[0]?.value) {
         user.picture = profile.photos[0].value;
       }
       await user.save();
+      console.log('Updated existing user');
       return user;
     }
 
+    console.log('User not found by googleId, searching by email:', email);
     // Try to find user by email (in case they registered with email first)
     user = await this.findOne({ email: email });
     
     if (user) {
+      console.log('Found existing user by email:', user.email);
       // Link Google account to existing email account
       // Only if user doesn't already have a googleId
       if (!user.googleId) {
         user.googleId = profile.id;
         user.authProvider = 'google'; // Switch to Google auth
+        console.log('Linking Google account to existing email account');
       }
       if (profile.photos && profile.photos[0]?.value) {
         user.picture = profile.photos[0].value;
       }
       user.lastLoginAt = new Date();
       await user.save();
+      console.log('Updated existing user with Google info');
       return user;
     }
 
@@ -142,8 +165,7 @@ userSchema.statics.findOrCreateGoogleUser = async function(profile) {
                  (profile.name ? `${profile.name.givenName || ''} ${profile.name.familyName || ''}`.trim() : 'User') ||
                  email.split('@')[0];
     
-    // Log user creation attempt
-    console.log('Creating new Google user:', { email, name, googleId: profile.id });
+    console.log('No existing user found. Creating new user:', { email, name, googleId: profile.id });
     
     try {
       user = await this.create({
@@ -155,14 +177,47 @@ userSchema.statics.findOrCreateGoogleUser = async function(profile) {
         lastLoginAt: new Date()
       });
 
-      console.log('New Google user created successfully:', { userId: user._id, email: user.email });
+      console.log('✅ New Google user created successfully:', { 
+        userId: user._id, 
+        email: user.email,
+        name: user.name,
+        googleId: user.googleId
+      });
     } catch (createError) {
-      console.error('Error creating Google user:', createError);
-      console.error('User data:', { email, name, googleId: profile.id });
+      console.error('❌ Error creating Google user:', createError);
+      console.error('Error name:', createError.name);
+      console.error('Error message:', createError.message);
+      console.error('Error code:', createError.code);
+      console.error('Error stack:', createError.stack);
+      console.error('User data attempted:', { email, name, googleId: profile.id });
+      
+      // Check for duplicate key error
+      if (createError.code === 11000) {
+        console.error('Duplicate key error - user may already exist');
+        // Try to find the user again
+        user = await this.findOne({ 
+          $or: [
+            { email: email },
+            { googleId: profile.id }
+          ]
+        });
+        if (user) {
+          console.log('Found user after duplicate error:', user.email);
+          return user;
+        }
+      }
+      
       throw createError;
     }
+    
+    console.log('=== findOrCreateGoogleUser SUCCESS ===');
     return user;
   } catch (error) {
+    console.error('=== findOrCreateGoogleUser ERROR ===');
+    console.error('Error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     throw error;
   }
 };

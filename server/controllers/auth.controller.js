@@ -219,7 +219,11 @@ const login = async (req, res) => {
  */
 const googleCallback = async (req, res) => {
   try {
+    logger.info('=== googleCallback Controller START ===');
+    logger.info('Request user:', req.user ? 'Present' : 'Missing');
+    
     if (!isDatabaseConnected()) {
+      logger.error('Database not connected in googleCallback');
       const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=database_unavailable`);
     }
@@ -230,6 +234,8 @@ const googleCallback = async (req, res) => {
       logger.error('Google OAuth callback: No user object in request');
       logger.error('Request user:', req.user);
       logger.error('Request session:', req.session);
+      logger.error('Request body:', req.body);
+      logger.error('Request query:', req.query);
       const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
@@ -239,13 +245,20 @@ const googleCallback = async (req, res) => {
       logger.error('Google OAuth callback: Invalid user data', { 
         userId: user._id, 
         email: user.email,
-        userObject: JSON.stringify(user)
+        userObject: JSON.stringify(user),
+        userKeys: Object.keys(user || {})
       });
       const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
     
-    logger.info(`Google OAuth callback: User authenticated - ${user.email} (${user._id})`);
+    logger.info(`✅ Google OAuth callback: User authenticated - ${user.email} (${user._id})`);
+    logger.info('User details:', {
+      email: user.email,
+      name: user.name,
+      authProvider: user.authProvider,
+      googleId: user.googleId
+    });
 
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user);
@@ -268,14 +281,17 @@ const googleCallback = async (req, res) => {
     res.cookie('accessToken', accessToken, cookieOptions);
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
-    logger.info(`Google OAuth login successful for: ${user.email}`);
+    logger.info(`✅ Google OAuth login successful for: ${user.email}`);
+    logger.info('=== googleCallback Controller SUCCESS ===');
 
     // Redirect to clean URL (home page) - no tokens in URL
     // Frontend will automatically detect cookies and fetch user info
     const frontendUrl = getSafeFrontendUrl();
     res.redirect(frontendUrl);
   } catch (error) {
+    logger.error('=== googleCallback Controller ERROR ===');
     logger.error('Google OAuth callback error:', error.message);
+    logger.error('Error name:', error.name);
     logger.error('Stack trace:', error.stack);
     const frontendUrl = getSafeFrontendUrl();
     res.redirect(`${frontendUrl}?error=auth_failed`);

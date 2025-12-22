@@ -11,7 +11,7 @@ interface UseIdleTimerOptions {
  * Hook to track idle time and trigger callback after specified duration
  */
 export const useIdleTimer = ({ onIdle, idleTime, enabled = true }: UseIdleTimerOptions) => {
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
