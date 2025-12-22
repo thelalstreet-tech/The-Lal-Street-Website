@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Home, BarChart3, Target, FileText, LogIn, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
@@ -23,7 +23,8 @@ interface NavigationProps {
 export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: NavigationProps) {
   const { user, isAuthenticated, logout, isLoading } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showProfileDropdownDesktop, setShowProfileDropdownDesktop] = useState(false);
+  const [showProfileDropdownMobile, setShowProfileDropdownMobile] = useState(false);
 
   const navItems = useMemo(() => [
     { id: 'home', label: 'Home', icon: Home },
@@ -57,12 +58,54 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
   }, [user?.name, getUserInitials]);
 
   // Memoize dropdown handlers to prevent recreation on every render
-  const handleMouseEnter = useCallback(() => {
-    setShowProfileDropdown(true);
+  // Use refs to track hover state and cancel timeouts
+  const desktopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnterDesktop = useCallback(() => {
+    // Cancel any pending close
+    if (desktopTimeoutRef.current) {
+      clearTimeout(desktopTimeoutRef.current);
+      desktopTimeoutRef.current = null;
+    }
+    setShowProfileDropdownDesktop(true);
   }, []);
 
-  const handleMouseLeave = useCallback(() => {
-    setShowProfileDropdown(false);
+  const handleMouseLeaveDesktop = useCallback(() => {
+    // Delay closing to allow moving cursor to dropdown content
+    desktopTimeoutRef.current = setTimeout(() => {
+      setShowProfileDropdownDesktop(false);
+      desktopTimeoutRef.current = null;
+    }, 200);
+  }, []);
+
+  const handleMouseEnterMobile = useCallback(() => {
+    // Cancel any pending close
+    if (mobileTimeoutRef.current) {
+      clearTimeout(mobileTimeoutRef.current);
+      mobileTimeoutRef.current = null;
+    }
+    setShowProfileDropdownMobile(true);
+  }, []);
+
+  const handleMouseLeaveMobile = useCallback(() => {
+    // Delay closing to allow moving cursor to dropdown content
+    mobileTimeoutRef.current = setTimeout(() => {
+      setShowProfileDropdownMobile(false);
+      mobileTimeoutRef.current = null;
+    }, 200);
+  }, []);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (desktopTimeoutRef.current) {
+        clearTimeout(desktopTimeoutRef.current);
+      }
+      if (mobileTimeoutRef.current) {
+        clearTimeout(mobileTimeoutRef.current);
+      }
+    };
   }, []);
 
   return (
@@ -131,10 +174,10 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                 ) : (
                   <div 
                     className="relative group"
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
+                    onMouseEnter={handleMouseEnterDesktop}
+                    onMouseLeave={handleMouseLeaveDesktop}
                   >
-                    <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
+                    <DropdownMenu open={showProfileDropdownDesktop} onOpenChange={setShowProfileDropdownDesktop}>
                       <DropdownMenuTrigger asChild>
                         <button 
                           className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all z-50"
@@ -162,8 +205,8 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                       <DropdownMenuContent 
                         align="end" 
                         className="w-56 z-[100] pointer-events-auto"
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={handleMouseLeave}
+                        onMouseEnter={handleMouseEnterDesktop}
+                        onMouseLeave={handleMouseLeaveDesktop}
                         sideOffset={5}
                       >
                         <DropdownMenuLabel className="font-normal">
@@ -212,10 +255,10 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                 ) : (
                   <div 
                     className="relative group"
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
+                    onMouseEnter={handleMouseEnterMobile}
+                    onMouseLeave={handleMouseLeaveMobile}
                   >
-                    <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
+                    <DropdownMenu open={showProfileDropdownMobile} onOpenChange={setShowProfileDropdownMobile}>
                       <DropdownMenuTrigger asChild>
                         <button 
                           className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all z-50"
@@ -243,8 +286,8 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                       <DropdownMenuContent 
                         align="end" 
                         className="w-56 z-[100] pointer-events-auto"
-                        onMouseEnter={handleMouseEnter}
-                        onMouseLeave={handleMouseLeave}
+                        onMouseEnter={handleMouseEnterMobile}
+                        onMouseLeave={handleMouseLeaveMobile}
                         sideOffset={5}
                       >
                         <DropdownMenuLabel className="font-normal">
