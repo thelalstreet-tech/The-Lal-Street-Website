@@ -58,6 +58,9 @@ const hasGoogleOAuth = () => {
 // Check if Google OAuth credentials are configured (at module load)
 const googleOAuthConfigured = hasGoogleOAuth();
 
+// Store callback URL at module level so we can access it in route handlers
+let configuredCallbackURL = null;
+
 if (googleOAuthConfigured) {
   // Construct callback URL - must be absolute for Google OAuth
   // Priority: GOOGLE_CALLBACK_URL env var > SERVER_URL + /api/auth/google/callback > RENDER_EXTERNAL_URL > localhost
@@ -96,6 +99,9 @@ if (googleOAuthConfigured) {
     logger.warn(`Forced HTTPS for callback URL in production: ${callbackURL}`);
   }
   
+  // Store the final callback URL for use in route handlers
+  configuredCallbackURL = callbackURL;
+  
   logger.info(`Google OAuth callback URL: ${callbackURL}`);
   logger.info(`Make sure this URL matches exactly in Google Cloud Console: ${callbackURL}`);
   logger.info(`Environment check - GOOGLE_CALLBACK_URL: ${process.env.GOOGLE_CALLBACK_URL || 'NOT SET'}`);
@@ -105,6 +111,7 @@ if (googleOAuthConfigured) {
   // Configure Google OAuth Strategy
   // Note: The callbackURL must match EXACTLY what's in Google Cloud Console
   // including protocol (https), domain, path, and no trailing slash
+  // CRITICAL: This callbackURL is used in BOTH the authorization request AND token exchange
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -184,11 +191,10 @@ router.get('/google/callback', (req, res, next) => {
   logger.info(`Google OAuth callback received. Query params: ${JSON.stringify(req.query)}`);
   logger.info(`Request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
   logger.info(`Full request URL: ${req.url}`);
+  logger.info(`Configured callback URL: ${configuredCallbackURL || process.env.GOOGLE_CALLBACK_URL || 'Not available'}`);
   
-  // Get the configured callback URL from the strategy
-  const strategy = passport._strategies.google;
-  const configuredCallbackURL = strategy?._oauth2?._redirectUri || 'Not available';
-  logger.info(`Configured callback URL in strategy: ${configuredCallbackURL}`);
+  // Use the stored callback URL or fallback to env var
+  const callbackURLForLogging = configuredCallbackURL || process.env.GOOGLE_CALLBACK_URL || 'Not configured';
   
   passport.authenticate('google', { 
     session: false
@@ -216,15 +222,22 @@ router.get('/google/callback', (req, res, next) => {
         logger.error(`  GOOGLE_CALLBACK_URL env var: ${process.env.GOOGLE_CALLBACK_URL || 'NOT SET'}`);
         logger.error(`  SERVER_URL env var: ${process.env.SERVER_URL || 'NOT SET'}`);
         logger.error(`  RENDER_EXTERNAL_URL env var: ${process.env.RENDER_EXTERNAL_URL || 'NOT SET'}`);
-        logger.error(`  Configured callback URL: ${configuredCallbackURL}`);
+        logger.error(`  Configured callback URL: ${callbackURLForLogging}`);
         logger.error(`  Request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
         logger.error(`  Request path: ${req.path}`);
+        logger.error(`  Request host: ${req.get('host')}`);
+        logger.error(`  Request protocol: ${req.protocol}`);
+        logger.error('');
+        logger.error('ROOT CAUSE ANALYSIS:');
+        logger.error('The redirect_uri sent in token exchange must match EXACTLY:');
+        logger.error('1. What was used in the authorization request');
+        logger.error('2. What is registered in Google Cloud Console');
         logger.error('');
         logger.error('ACTION REQUIRED:');
         logger.error('1. Go to Google Cloud Console → APIs & Services → Credentials');
         logger.error('2. Find your OAuth 2.0 Client ID');
         logger.error('3. Under "Authorized redirect URIs", ensure this EXACT URL is listed:');
-        logger.error(`   ${configuredCallbackURL}`);
+        logger.error(`   ${callbackURLForLogging}`);
         logger.error('4. The URL must match EXACTLY (case-sensitive, no trailing slash, must be https://)');
         logger.error('5. Save changes and wait 1-2 minutes for propagation');
         logger.error('═══════════════════════════════════════════════════════');
