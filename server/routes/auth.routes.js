@@ -198,16 +198,25 @@ router.get('/google/callback', (req, res, next) => {
   
   // CRITICAL: Extract the base callback URL (without query params) to compare
   // The redirect_uri in token exchange must match the base URL exactly
-  const baseCallbackURL = `${req.protocol}://${req.get('host')}${req.path}`;
+  // Use req.originalUrl to get the full path including mount prefix
+  const fullPath = req.originalUrl.split('?')[0]; // Remove query params
+  const baseCallbackURL = `${req.protocol}://${req.get('host')}${fullPath}`;
   logger.info(`Base callback URL from request: ${baseCallbackURL}`);
   logger.info(`Expected callback URL: ${callbackURLForLogging}`);
+  logger.info(`Request path (route): ${req.path}`);
+  logger.info(`Request originalUrl: ${req.originalUrl}`);
+  logger.info(`Full path (no query): ${fullPath}`);
   
   // Verify the request URL matches our configured callback URL
   if (baseCallbackURL !== callbackURLForLogging) {
-    logger.warn(`⚠️  WARNING: Request URL doesn't match configured callback URL!`);
-    logger.warn(`   Request: ${baseCallbackURL}`);
-    logger.warn(`   Configured: ${callbackURLForLogging}`);
-    logger.warn(`   This might cause redirect_uri mismatch in token exchange`);
+    logger.error(`❌ CRITICAL MISMATCH: Request URL doesn't match configured callback URL!`);
+    logger.error(`   Request URL: ${baseCallbackURL}`);
+    logger.error(`   Configured URL: ${callbackURLForLogging}`);
+    logger.error(`   This WILL cause redirect_uri mismatch in token exchange!`);
+    logger.error(`   Passport will send: ${baseCallbackURL}`);
+    logger.error(`   But Google expects: ${callbackURLForLogging}`);
+  } else {
+    logger.info(`✅ Callback URL matches: ${baseCallbackURL}`);
   }
   
   passport.authenticate('google', { 
@@ -239,11 +248,16 @@ router.get('/google/callback', (req, res, next) => {
         logger.error(`  Configured callback URL: ${callbackURLForLogging}`);
         logger.error(`  Base callback URL from request: ${baseCallbackURL}`);
         logger.error(`  Full request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
-        logger.error(`  Request path: ${req.path}`);
+        logger.error(`  Request path (route): ${req.path}`);
+        logger.error(`  Request originalUrl: ${req.originalUrl}`);
+        logger.error(`  Full path (no query): ${fullPath}`);
         logger.error(`  Request host: ${req.get('host')}`);
         logger.error(`  Request protocol: ${req.protocol}`);
         if (baseCallbackURL !== callbackURLForLogging) {
-          logger.error(`  ⚠️  MISMATCH DETECTED: Request URL doesn't match configured URL!`);
+          logger.error(`  ❌ CRITICAL MISMATCH: Request URL doesn't match configured URL!`);
+          logger.error(`     This is likely causing the invalid_grant error!`);
+          logger.error(`     Passport will send redirect_uri: ${baseCallbackURL}`);
+          logger.error(`     But Google expects: ${callbackURLForLogging}`);
         }
         logger.error('');
         logger.error('ROOT CAUSE ANALYSIS:');
