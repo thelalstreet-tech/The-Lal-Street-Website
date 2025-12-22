@@ -63,7 +63,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const currentUser = await getCurrentUser();
           if (currentUser && isMounted) {
             logger.log('User found from server:', currentUser.email);
-            setUser(currentUser);
+            // Use functional update to prevent unnecessary re-renders if user hasn't changed
+            setUser(prevUser => {
+              if (prevUser?.id === currentUser.id && prevUser?.email === currentUser.email) {
+                return prevUser; // No change, prevent re-render
+              }
+              return currentUser;
+            });
             setIsLoading(false);
             return; // Success, exit early
           }
@@ -195,7 +201,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           const currentUser = await getCurrentUser();
           if (currentUser) {
             logger.log('✅ User authenticated after OAuth callback:', currentUser.email);
-            setUser(currentUser);
+            // Use functional update to prevent unnecessary re-renders
+            setUser(prevUser => {
+              // Only update if user actually changed to prevent flicker
+              if (prevUser?.id !== currentUser.id || prevUser?.email !== currentUser.email) {
+                return currentUser;
+              }
+              return prevUser;
+            });
             setIsLoading(false);
             // Clean URL after successful fetch
             window.history.replaceState({}, document.title, window.location.pathname);

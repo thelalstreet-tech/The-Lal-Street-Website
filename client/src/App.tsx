@@ -292,7 +292,7 @@ export default function App() {
 
       <SnowFall
         snowflakeCount={80}
-        style={{ position: 'fixed', width: '100%', height: '100%', zIndex: 1 }}
+        style={{ position: 'fixed', width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none' }}
       />
 
       <Navigation 

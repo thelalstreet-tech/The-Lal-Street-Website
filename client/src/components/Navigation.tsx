@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Home, BarChart3, Target, FileText, LogIn, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
@@ -25,33 +25,48 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
-  const navItems = [
+  const navItems = useMemo(() => [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'investment-plan', label: 'Investment Plan', icon: BarChart3 },
     { id: 'retirement-plan', label: 'Retirement Plan', icon: Target },
     { id: 'financial-planning', label: 'Financial Planning', icon: FileText },
-  ];
+  ], []);
 
-  const handleNavClick = (pageId: string) => {
+  const handleNavClick = useCallback((pageId: string) => {
     onNavigate(pageId);
-  };
+  }, [onNavigate]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await logout();
-  };
+  }, [logout]);
 
-  // Get user initials for avatar fallback
-  const getUserInitials = (name: string) => {
+  // Get user initials for avatar fallback - memoized
+  const getUserInitials = useCallback((name: string) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map(n => n[0])
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  };
+  }, []);
+
+  // Memoize user initials to prevent recalculation
+  const userInitials = useMemo(() => {
+    return user?.name ? getUserInitials(user.name) : 'U';
+  }, [user?.name, getUserInitials]);
+
+  // Memoize dropdown handlers to prevent recreation on every render
+  const handleMouseEnter = useCallback(() => {
+    setShowProfileDropdown(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setShowProfileDropdown(false);
+  }, []);
 
   return (
-    <nav className="bg-white border-b border-slate-300 shadow-md sticky top-0 z-50">
+    <nav className="bg-white border-b border-slate-300 shadow-md sticky top-0 z-50 will-change-transform pointer-events-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -116,30 +131,40 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                 ) : (
                   <div 
                     className="relative group"
-                    onMouseEnter={() => setShowProfileDropdown(true)}
-                    onMouseLeave={() => setShowProfileDropdown(false)}
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
                   >
                     <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
                       <DropdownMenuTrigger asChild>
                         <button 
-                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all"
+                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all z-50"
                           title={user?.email || 'Profile'}
+                          type="button"
                         >
-                          <Avatar className="h-9 w-9 border-2 border-blue-500 hover:border-blue-600 transition-colors">
+                          <Avatar className="h-9 w-9 border-2 border-blue-500 hover:border-blue-600 transition-colors pointer-events-auto">
                             {user?.picture && (
-                              <AvatarImage src={user.picture} alt={user.name} />
+                              <AvatarImage 
+                                src={user.picture} 
+                                alt={user.name || 'User'} 
+                                loading="lazy"
+                                onError={(e) => {
+                                  // Hide image on error, show fallback
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
                             )}
                             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
-                              {user?.name ? getUserInitials(user.name) : 'U'}
+                              {userInitials}
                             </AvatarFallback>
                           </Avatar>
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent 
                         align="end" 
-                        className="w-56"
-                        onMouseEnter={() => setShowProfileDropdown(true)}
-                        onMouseLeave={() => setShowProfileDropdown(false)}
+                        className="w-56 z-[100] pointer-events-auto"
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                        sideOffset={5}
                       >
                         <DropdownMenuLabel className="font-normal">
                           <div className="flex flex-col space-y-1">
@@ -187,30 +212,40 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                 ) : (
                   <div 
                     className="relative group"
-                    onMouseEnter={() => setShowProfileDropdown(true)}
-                    onMouseLeave={() => setShowProfileDropdown(false)}
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
                   >
                     <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
                       <DropdownMenuTrigger asChild>
                         <button 
-                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all"
+                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all z-50"
                           title={user?.email || 'Profile'}
+                          type="button"
                         >
-                          <Avatar className="h-8 w-8 border-2 border-blue-500 hover:border-blue-600 transition-colors">
+                          <Avatar className="h-8 w-8 border-2 border-blue-500 hover:border-blue-600 transition-colors pointer-events-auto">
                             {user?.picture && (
-                              <AvatarImage src={user.picture} alt={user.name} />
+                              <AvatarImage 
+                                src={user.picture} 
+                                alt={user.name || 'User'} 
+                                loading="lazy"
+                                onError={(e) => {
+                                  // Hide image on error, show fallback
+                                  e.currentTarget.style.display = 'none';
+                                }}
+                              />
                             )}
                             <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold">
-                              {user?.name ? getUserInitials(user.name) : 'U'}
+                              {userInitials}
                             </AvatarFallback>
                           </Avatar>
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent 
                         align="end" 
-                        className="w-56"
-                        onMouseEnter={() => setShowProfileDropdown(true)}
-                        onMouseLeave={() => setShowProfileDropdown(false)}
+                        className="w-56 z-[100] pointer-events-auto"
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                        sideOffset={5}
                       >
                         <DropdownMenuLabel className="font-normal">
                           <div className="flex flex-col space-y-1">
