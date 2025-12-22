@@ -39,6 +39,7 @@ interface BucketLiveReturns {
   sipTotalInvested: number;
   sipCurrentValue: number | null;
   sipXIRR: number | null;
+  sipProfitPercentage: number | null;
 }
 
 export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps) {
@@ -224,6 +225,11 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
 
       const bucketSipXIRR = sipCashFlows.length >= 2 ? calculateXIRR(sipCashFlows) : null;
 
+      // Calculate SIP net profit percentage (same as SIP calculator)
+      const sipProfitPercentage = totalSIPInvested > 0 && totalSIPValue > 0
+        ? ((totalSIPValue - totalSIPInvested) / totalSIPInvested) * 100
+        : null;
+
       const bucketReturns: BucketLiveReturns = {
         bucketCagr3Y,
         bucketCagr5Y,
@@ -236,6 +242,7 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
         sipTotalInvested: totalSIPInvested,
         sipCurrentValue: totalSIPValue > 0 ? totalSIPValue : null,
         sipXIRR: bucketSipXIRR,
+        sipProfitPercentage,
       };
 
       setFundLiveReturns(fundMetrics);
@@ -421,7 +428,7 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                 <h4 className="font-semibold text-sm sm:text-base">SIP Investment</h4>
               </div>
               <p className="text-xs sm:text-sm text-gray-600 mb-3">
-                You would have made <strong className="text-teal-700">{bucketLiveReturns.sipXIRR !== null ? `${formatNumber(bucketLiveReturns.sipXIRR)}%` : 'N/A'}</strong> annualised returns on ₹1,000 invested monthly for 3 years.
+                You would have made <strong className="text-teal-700">{bucketLiveReturns.sipXIRR !== null ? `${formatNumber(bucketLiveReturns.sipXIRR)}%` : 'N/A'}</strong> CAGR on ₹1,000 invested monthly for 3 years.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
@@ -437,9 +444,9 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-gray-600 mb-1">XIRR (Annualised)</p>
-                  <p className={`text-sm sm:text-base font-bold ${bucketLiveReturns.sipXIRR !== null && bucketLiveReturns.sipXIRR >= 0 ? 'text-teal-700' : 'text-red-700'}`}>
-                    {bucketLiveReturns.sipXIRR !== null ? `${formatNumber(bucketLiveReturns.sipXIRR)}%` : 'N/A'}
+                  <p className="text-xs text-gray-600 mb-1">Net profit %</p>
+                  <p className={`text-sm sm:text-base font-bold ${bucketLiveReturns.sipProfitPercentage !== null && bucketLiveReturns.sipProfitPercentage >= 0 ? 'text-teal-700' : 'text-red-700'}`}>
+                    {bucketLiveReturns.sipProfitPercentage !== null ? `${bucketLiveReturns.sipProfitPercentage >= 0 ? '+' : ''}${formatNumber(bucketLiveReturns.sipProfitPercentage)}%` : 'N/A'}
                   </p>
                 </div>
               </div>
