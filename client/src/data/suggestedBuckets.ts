@@ -56,7 +56,6 @@ export async function loadSuggestedBuckets(activeOnly: boolean = false): Promise
     }
     return cachedBuckets;
   } catch (error) {
-    console.error('Error loading suggested buckets:', error);
     // Return cached data even if expired, as fallback
     if (cachedBuckets.length > 0) {
       if (activeOnly) {
@@ -81,14 +80,16 @@ export async function saveSuggestedBuckets(buckets: SuggestedBucket[]): Promise<
 /**
  * Add a new suggested bucket - now calls API
  */
-export async function addSuggestedBucket(bucket: SuggestedBucket): Promise<void> {
+export async function addSuggestedBucket(bucket: SuggestedBucket): Promise<SuggestedBucket> {
   try {
-    await createSuggestedBucket(bucket);
+    // Remove id, createdAt, updatedAt as API will generate these
+    const { id, createdAt, updatedAt, ...bucketData } = bucket;
+    const created = await createSuggestedBucket(bucketData);
     // Clear cache to force refresh on next load
     cachedBuckets = [];
     cacheTimestamp = 0;
+    return created;
   } catch (error) {
-    console.error('Error adding suggested bucket:', error);
     throw error;
   }
 }
@@ -103,7 +104,6 @@ export async function updateSuggestedBucket(bucketId: string, updates: Partial<S
     cachedBuckets = [];
     cacheTimestamp = 0;
   } catch (error) {
-    console.error('Error updating suggested bucket:', error);
     throw error;
   }
 }
@@ -118,7 +118,6 @@ export async function deleteSuggestedBucket(bucketId: string): Promise<void> {
     cachedBuckets = [];
     cacheTimestamp = 0;
   } catch (error) {
-    console.error('Error deleting suggested bucket:', error);
     throw error;
   }
 }

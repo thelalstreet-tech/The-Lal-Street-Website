@@ -60,13 +60,11 @@ export function HomePage({ onNavigate, onImportBucket }: HomePageProps) {
                 setSuggestedBuckets(freshBuckets);
               }
             } catch (error) {
-              console.error('Error refreshing buckets:', error);
               // Keep using cached buckets on error
             }
           }
         }
       } catch (error) {
-        console.error('Error loading suggested buckets:', error);
         if (isMounted) {
           setSuggestedBuckets([]);
           setIsLoadingBuckets(false);
@@ -91,7 +89,7 @@ export function HomePage({ onNavigate, onImportBucket }: HomePageProps) {
           setSuggestedBuckets(reloaded);
         }
       } catch (error) {
-        console.error('Error in auto-recalculation:', error);
+        // Error in auto-recalculation - silently fail
       } finally {
         if (isMounted) {
           setIsRecalculating(false);

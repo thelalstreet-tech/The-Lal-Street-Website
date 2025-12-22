@@ -19,7 +19,6 @@ export async function fetchSuggestedBuckets(activeOnly: boolean = false): Promis
     const result = await response.json();
     return result.data || [];
   } catch (error) {
-    console.error('Error fetching suggested buckets:', error);
     // Return empty array on error to prevent crashes
     return [];
   }
@@ -43,7 +42,6 @@ export async function fetchSuggestedBucketById(id: string): Promise<SuggestedBuc
     const result = await response.json();
     return result.data || null;
   } catch (error) {
-    console.error('Error fetching suggested bucket:', error);
     return null;
   }
 }
@@ -75,7 +73,6 @@ export async function createSuggestedBucket(bucketData: Omit<SuggestedBucket, 'i
     const result = await response.json();
     return result.data;
   } catch (error) {
-    console.error('Error creating suggested bucket:', error);
     throw error;
   }
 }
@@ -107,7 +104,6 @@ export async function updateSuggestedBucket(id: string, updates: Partial<Suggest
     const result = await response.json();
     return result.data;
   } catch (error) {
-    console.error('Error updating suggested bucket:', error);
     throw error;
   }
 }
@@ -134,7 +130,6 @@ export async function deleteSuggestedBucket(id: string): Promise<void> {
       throw new Error(error.message || `Failed to delete suggested bucket: ${response.statusText}`);
     }
   } catch (error) {
-    console.error('Error deleting suggested bucket:', error);
     throw error;
   }
 }

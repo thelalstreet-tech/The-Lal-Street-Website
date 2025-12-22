@@ -62,7 +62,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         try {
           const currentUser = await getCurrentUser();
           if (currentUser && isMounted) {
-            logger.log('User found from server:', currentUser.email);
             // Use functional update to prevent unnecessary re-renders if user hasn't changed
             setUser(prevUser => {
               if (prevUser?.id === currentUser.id && prevUser?.email === currentUser.email) {
@@ -74,7 +73,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             return; // Success, exit early
           }
         } catch (error) {
-          logger.log('No user from server, checking localStorage...', error);
         }
 
         // Fallback: Check if user is stored locally (for email/password login with localStorage)
@@ -104,7 +102,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               }
             }
           } catch (error) {
-            logger.log('Error verifying user:', error);
             clearTokens();
             setUser(null);
           }
@@ -115,7 +112,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }
       } catch (error) {
-        logger.log('Error initializing auth:', error);
         if (isMounted) {
           clearTokens();
           setUser(null);
@@ -145,7 +141,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // If there's an error, show it and clean URL
     if (error) {
-      console.error('OAuth error:', error);
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
@@ -155,52 +150,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const isOAuthCallback = oauthSuccess === 'true' || code || state;
     
     if (isOAuthCallback) {
-      logger.log('OAuth callback detected:', { oauthSuccess, code: !!code, state: !!state, hasToken: !!token, tokenLength: token?.length });
-      
       // If token is in URL (fallback for cross-domain cookie issues), store it temporarily
       if (token) {
         // Decode token in case it was URL encoded
         const decodedToken = decodeURIComponent(token);
-        logger.log('Token found in URL, storing in localStorage...', { 
-          originalLength: token.length, 
-          decodedLength: decodedToken.length,
-          tokenPreview: decodedToken.substring(0, 20) + '...' 
-        });
         
         // Store token in localStorage as fallback - use the same key as TOKEN_KEY
         localStorage.setItem('accessToken', decodedToken);
         
-        // Verify it was stored
-        const storedToken = localStorage.getItem('accessToken');
-        logger.log('Token stored, verification:', { 
-          stored: !!storedToken, 
-          storedLength: storedToken?.length,
-          matches: storedToken === decodedToken,
-          storedPreview: storedToken ? storedToken.substring(0, 20) + '...' : null
-        });
-        
         // Clean URL immediately to remove token
         window.history.replaceState({}, document.title, window.location.pathname);
-        logger.log('URL cleaned, token removed from URL');
-      } else {
-        logger.log('⚠️ No token found in URL, will rely on cookies');
       }
-      
-      logger.log('Fetching user with credentials...');
       
       // Function to fetch user with retries
       const fetchUserWithRetry = async (attempt = 1, maxAttempts = 3) => {
         try {
-          // Check if token is available before making request
-          const tokenCheck = localStorage.getItem('accessToken');
-          logger.log(`Attempt ${attempt} to fetch user...`, { 
-            hasToken: !!tokenCheck, 
-            tokenLength: tokenCheck?.length 
-          });
-          
           const currentUser = await getCurrentUser();
           if (currentUser) {
-            logger.log('✅ User authenticated after OAuth callback:', currentUser.email);
             // Use functional update to prevent unnecessary re-renders
             setUser(prevUser => {
               // Only update if user actually changed to prevent flicker
@@ -214,14 +180,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             window.history.replaceState({}, document.title, window.location.pathname);
             return true;
           } else {
-            logger.log(`⚠️ No user found on attempt ${attempt}`);
             if (attempt < maxAttempts) {
               // Retry with exponential backoff
               const delay = attempt * 1000; // 1s, 2s, 3s
-              logger.log(`Retrying in ${delay}ms...`);
               setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
             } else {
-              logger.log('❌ Failed to fetch user after all retries');
               setIsLoading(false);
               // Clean URL even on failure
               window.history.replaceState({}, document.title, window.location.pathname);
@@ -229,12 +192,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
           }
         } catch (error) {
-          logger.log(`Error on attempt ${attempt}:`, error);
           if (attempt < maxAttempts) {
             const delay = attempt * 1000;
             setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
           } else {
-            logger.log('❌ Failed after all retries');
             setIsLoading(false);
             window.history.replaceState({}, document.title, window.location.pathname);
             return false;
