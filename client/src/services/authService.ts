@@ -39,10 +39,14 @@ export const setTokens = (accessToken: string, refreshToken: string) => {
  * if using cookies (backend reads from cookies automatically).
  */
 export const getAccessToken = (): string | null => {
-  // Try localStorage first (for email/password login)
+  // Try localStorage first (for email/password login and OAuth token fallback)
   const token = localStorage.getItem(TOKEN_KEY);
-  if (token) return token;
+  if (token) {
+    console.log('Token found in localStorage:', { hasToken: true, tokenLength: token.length });
+    return token;
+  }
   
+  console.log('No token in localStorage, will rely on cookies');
   // If no localStorage token, assume cookies are being used (set by backend)
   // Return null - backend will read from cookies
   return null;
@@ -198,8 +202,11 @@ export const getCurrentUser = async (): Promise<User | null> => {
 
     console.log('Fetching user from /api/auth/me', {
       hasToken: !!token,
+      tokenLength: token?.length,
+      tokenPreview: token ? token.substring(0, 20) + '...' : null,
       apiUrl: `${API_BASE_URL}/api/auth/me`,
-      credentials: 'include'
+      credentials: 'include',
+      headers: Object.keys(headers)
     });
 
     const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
@@ -208,6 +215,11 @@ export const getCurrentUser = async (): Promise<User | null> => {
     });
 
     console.log('Response status:', response.status, response.statusText);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error response:', errorText);
+    }
 
     if (response.status === 401) {
       // Token expired, try to refresh

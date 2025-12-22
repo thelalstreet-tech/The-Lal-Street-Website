@@ -149,15 +149,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const isOAuthCallback = oauthSuccess === 'true' || code || state;
     
     if (isOAuthCallback) {
-      logger.log('OAuth callback detected:', { oauthSuccess, code: !!code, state: !!state, hasToken: !!token });
+      logger.log('OAuth callback detected:', { oauthSuccess, code: !!code, state: !!state, hasToken: !!token, tokenLength: token?.length });
       
       // If token is in URL (fallback for cross-domain cookie issues), store it temporarily
       if (token) {
-        logger.log('Token found in URL, storing temporarily...');
-        // Store token in localStorage as fallback
-        localStorage.setItem('accessToken', token);
+        // Decode token in case it was URL encoded
+        const decodedToken = decodeURIComponent(token);
+        logger.log('Token found in URL, storing in localStorage...', { 
+          originalLength: token.length, 
+          decodedLength: decodedToken.length,
+          tokenPreview: decodedToken.substring(0, 20) + '...' 
+        });
+        
+        // Store token in localStorage as fallback - use the same key as TOKEN_KEY
+        localStorage.setItem('accessToken', decodedToken);
+        
+        // Verify it was stored
+        const storedToken = localStorage.getItem('accessToken');
+        logger.log('Token stored, verification:', { 
+          stored: !!storedToken, 
+          storedLength: storedToken?.length,
+          matches: storedToken === decodedToken,
+          storedPreview: storedToken ? storedToken.substring(0, 20) + '...' : null
+        });
+        
         // Clean URL immediately to remove token
         window.history.replaceState({}, document.title, window.location.pathname);
+        logger.log('URL cleaned, token removed from URL');
+      } else {
+        logger.log('⚠️ No token found in URL, will rely on cookies');
       }
       
       logger.log('Fetching user with credentials...');
@@ -165,7 +185,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Function to fetch user with retries
       const fetchUserWithRetry = async (attempt = 1, maxAttempts = 3) => {
         try {
-          logger.log(`Attempt ${attempt} to fetch user...`);
+          // Check if token is available before making request
+          const tokenCheck = localStorage.getItem('accessToken');
+          logger.log(`Attempt ${attempt} to fetch user...`, { 
+            hasToken: !!tokenCheck, 
+            tokenLength: tokenCheck?.length 
+          });
+          
           const currentUser = await getCurrentUser();
           if (currentUser) {
             logger.log('✅ User authenticated after OAuth callback:', currentUser.email);
@@ -179,6 +205,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             if (attempt < maxAttempts) {
               // Retry with exponential backoff
               const delay = attempt * 1000; // 1s, 2s, 3s
+              logger.log(`Retrying in ${delay}ms...`);
               setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
             } else {
               logger.log('❌ Failed to fetch user after all retries');
@@ -202,8 +229,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       };
       
-      // Start fetching user after a short delay to ensure cookies are set
-      setTimeout(() => fetchUserWithRetry(), 500);
+      // Start fetching user after a short delay to ensure token is stored
+      setTimeout(() => fetchUserWithRetry(), 100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount
