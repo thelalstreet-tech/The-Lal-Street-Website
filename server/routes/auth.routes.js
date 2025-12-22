@@ -60,14 +60,31 @@ const googleOAuthConfigured = hasGoogleOAuth();
 
 if (googleOAuthConfigured) {
   // Construct callback URL - must be absolute for Google OAuth
+  // Priority: GOOGLE_CALLBACK_URL env var > SERVER_URL + /api/auth/google/callback > RENDER_EXTERNAL_URL > localhost
   let callbackURL = process.env.GOOGLE_CALLBACK_URL;
+  
   if (!callbackURL) {
-    // Fallback: construct from server URL or use default
-    const serverUrl = process.env.SERVER_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5000';
-    callbackURL = `${serverUrl}/api/auth/google/callback`;
+    // Try to construct from available environment variables
+    const serverUrl = process.env.SERVER_URL || process.env.RENDER_EXTERNAL_URL;
+    
+    if (serverUrl) {
+      // Ensure serverUrl doesn't have trailing slash
+      const cleanServerUrl = serverUrl.replace(/\/$/, '');
+      callbackURL = `${cleanServerUrl}/api/auth/google/callback`;
+    } else {
+      // Fallback to localhost for development
+      callbackURL = 'http://localhost:5000/api/auth/google/callback';
+    }
+  }
+  
+  // Ensure callback URL is absolute (starts with http:// or https://)
+  if (!callbackURL.startsWith('http://') && !callbackURL.startsWith('https://')) {
+    logger.error(`Invalid callback URL format: ${callbackURL}. Must be absolute URL.`);
+    callbackURL = 'http://localhost:5000/api/auth/google/callback';
   }
   
   logger.info(`Google OAuth callback URL: ${callbackURL}`);
+  logger.info(`Make sure this URL matches exactly in Google Cloud Console: ${callbackURL}`);
   
   // Configure Google OAuth Strategy
   passport.use(new GoogleStrategy({
@@ -79,10 +96,11 @@ if (googleOAuthConfigured) {
       const user = await User.findOrCreateGoogleUser(profile);
       return done(null, user);
     } catch (error) {
+      logger.error('Google OAuth user creation error:', error);
       return done(error, null);
     }
   }));
-  logger.info('Google OAuth strategy configured');
+  logger.info('Google OAuth strategy configured successfully');
 } else {
   logger.warn('Google OAuth credentials not configured. Google login will be disabled.');
   logger.warn('To enable Google OAuth, set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in your .env file');
@@ -141,11 +159,38 @@ router.get('/google/callback', (req, res, next) => {
     logger.warn('Google OAuth callback received but credentials not configured');
     return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=oauth_not_configured`);
   }
+  
+  // Log callback details for debugging
+  logger.info(`Google OAuth callback received. Query params: ${JSON.stringify(req.query)}`);
+  
   passport.authenticate('google', { 
-    session: false,
-    failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`
+    session: false
+  }, (err, user, info) => {
+    // Custom callback to handle errors and success
+    if (err) {
+      logger.error('Google OAuth authentication error:', err);
+      logger.error('Error details:', {
+        message: err.message,
+        name: err.name,
+        stack: err.stack
+      });
+      // Check if it's a callback URL mismatch error
+      if (err.message && err.message.includes('redirect_uri_mismatch')) {
+        logger.error('CALLBACK URL MISMATCH! Check that GOOGLE_CALLBACK_URL matches Google Cloud Console');
+        logger.error(`Current callback URL: ${process.env.GOOGLE_CALLBACK_URL || 'Not set - using constructed URL'}`);
+      }
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed&details=${encodeURIComponent(err.message)}`);
+    }
+    if (!user) {
+      logger.warn('Google OAuth authentication failed - no user returned');
+      logger.warn('Info:', info);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
+    }
+    // Attach user to request and call googleCallback handler directly
+    req.user = user;
+    googleCallback(req, res, next);
   })(req, res, next);
-}, googleCallback);
+});
 
 // POST /api/auth/refresh - Refresh access token
 router.post('/refresh', authLimiter, refreshToken);
