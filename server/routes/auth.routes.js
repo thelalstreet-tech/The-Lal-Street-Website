@@ -196,6 +196,20 @@ router.get('/google/callback', (req, res, next) => {
   // Use the stored callback URL or fallback to env var
   const callbackURLForLogging = configuredCallbackURL || process.env.GOOGLE_CALLBACK_URL || 'Not configured';
   
+  // CRITICAL: Extract the base callback URL (without query params) to compare
+  // The redirect_uri in token exchange must match the base URL exactly
+  const baseCallbackURL = `${req.protocol}://${req.get('host')}${req.path}`;
+  logger.info(`Base callback URL from request: ${baseCallbackURL}`);
+  logger.info(`Expected callback URL: ${callbackURLForLogging}`);
+  
+  // Verify the request URL matches our configured callback URL
+  if (baseCallbackURL !== callbackURLForLogging) {
+    logger.warn(`⚠️  WARNING: Request URL doesn't match configured callback URL!`);
+    logger.warn(`   Request: ${baseCallbackURL}`);
+    logger.warn(`   Configured: ${callbackURLForLogging}`);
+    logger.warn(`   This might cause redirect_uri mismatch in token exchange`);
+  }
+  
   passport.authenticate('google', { 
     session: false
   }, (err, user, info) => {
@@ -223,10 +237,14 @@ router.get('/google/callback', (req, res, next) => {
         logger.error(`  SERVER_URL env var: ${process.env.SERVER_URL || 'NOT SET'}`);
         logger.error(`  RENDER_EXTERNAL_URL env var: ${process.env.RENDER_EXTERNAL_URL || 'NOT SET'}`);
         logger.error(`  Configured callback URL: ${callbackURLForLogging}`);
-        logger.error(`  Request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+        logger.error(`  Base callback URL from request: ${baseCallbackURL}`);
+        logger.error(`  Full request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
         logger.error(`  Request path: ${req.path}`);
         logger.error(`  Request host: ${req.get('host')}`);
         logger.error(`  Request protocol: ${req.protocol}`);
+        if (baseCallbackURL !== callbackURLForLogging) {
+          logger.error(`  ⚠️  MISMATCH DETECTED: Request URL doesn't match configured URL!`);
+        }
         logger.error('');
         logger.error('ROOT CAUSE ANALYSIS:');
         logger.error('The redirect_uri sent in token exchange must match EXACTLY:');
