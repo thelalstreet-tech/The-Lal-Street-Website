@@ -132,6 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
+    const oauthSuccess = urlParams.get('oauth_success');
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     
@@ -143,48 +144,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return;
     }
 
-    // If OAuth callback succeeded (has code or state parameter), refresh user data
-    // This ensures we get the user immediately after OAuth redirect
-    if (code || state) {
-      logger.log('OAuth callback detected, fetching user...');
-      // Longer delay to ensure cookies are set by backend
-      setTimeout(async () => {
+    // Check for OAuth success - either explicit success param or code/state from Google
+    const isOAuthCallback = oauthSuccess === 'true' || code || state;
+    
+    if (isOAuthCallback) {
+      logger.log('OAuth callback detected:', { oauthSuccess, code: !!code, state: !!state });
+      logger.log('Fetching user with credentials...');
+      
+      // Function to fetch user with retries
+      const fetchUserWithRetry = async (attempt = 1, maxAttempts = 3) => {
         try {
+          logger.log(`Attempt ${attempt} to fetch user...`);
           const currentUser = await getCurrentUser();
           if (currentUser) {
             logger.log('✅ User authenticated after OAuth callback:', currentUser.email);
             setUser(currentUser);
             setIsLoading(false);
+            // Clean URL after successful fetch
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return true;
           } else {
-            logger.log('⚠️ No user found after OAuth callback, retrying...');
-            // Retry after another delay
-            setTimeout(async () => {
-              try {
-                const retryUser = await getCurrentUser();
-                if (retryUser) {
-                  logger.log('✅ User found on retry:', retryUser.email);
-                  setUser(retryUser);
-                  setIsLoading(false);
-                } else {
-                  logger.log('❌ Still no user after retry');
-                  setIsLoading(false);
-                }
-              } catch (retryError) {
-                logger.log('Error on retry:', retryError);
-                setIsLoading(false);
-              }
-            }, 1000);
+            logger.log(`⚠️ No user found on attempt ${attempt}`);
+            if (attempt < maxAttempts) {
+              // Retry with exponential backoff
+              const delay = attempt * 1000; // 1s, 2s, 3s
+              setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
+            } else {
+              logger.log('❌ Failed to fetch user after all retries');
+              setIsLoading(false);
+              // Clean URL even on failure
+              window.history.replaceState({}, document.title, window.location.pathname);
+              return false;
+            }
           }
         } catch (error) {
-          logger.log('Error fetching user after OAuth callback:', error);
-          setIsLoading(false);
+          logger.log(`Error on attempt ${attempt}:`, error);
+          if (attempt < maxAttempts) {
+            const delay = attempt * 1000;
+            setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
+          } else {
+            logger.log('❌ Failed after all retries');
+            setIsLoading(false);
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return false;
+          }
         }
-      }, 1000);
+      };
       
-      // Clean URL after a short delay
-      setTimeout(() => {
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }, 100);
+      // Start fetching user after a short delay to ensure cookies are set
+      setTimeout(() => fetchUserWithRetry(), 500);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount

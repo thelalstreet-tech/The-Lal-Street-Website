@@ -264,30 +264,39 @@ const googleCallback = async (req, res) => {
     const { accessToken, refreshToken } = generateTokens(user);
 
     // Set tokens in httpOnly cookies (most secure - tokens never exposed to JavaScript)
+    // Use sameSite: 'none' in production for cross-site redirects (Google OAuth)
+    const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = {
       httpOnly: true, // Prevents JavaScript access (XSS protection)
-      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'lax', // CSRF protection
+      secure: isProduction, // HTTPS only in production (required for sameSite: 'none')
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site redirects in production
       maxAge: 15 * 60 * 1000, // 15 minutes (matches access token expiry)
+      path: '/' // Root path so cookie is accessible everywhere
     };
 
     const refreshCookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches refresh token expiry)
+      path: '/'
     };
 
     res.cookie('accessToken', accessToken, cookieOptions);
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
 
     logger.info(`✅ Google OAuth login successful for: ${user.email}`);
+    logger.info('Cookie settings:', {
+      sameSite: cookieOptions.sameSite,
+      secure: cookieOptions.secure,
+      path: cookieOptions.path
+    });
     logger.info('=== googleCallback Controller SUCCESS ===');
 
-    // Redirect to clean URL (home page) - no tokens in URL
-    // Frontend will automatically detect cookies and fetch user info
+    // Redirect to frontend with success parameter so frontend knows login succeeded
+    // Frontend will detect this and fetch user info
     const frontendUrl = getSafeFrontendUrl();
-    res.redirect(frontendUrl);
+    res.redirect(`${frontendUrl}?oauth_success=true`);
   } catch (error) {
     logger.error('=== googleCallback Controller ERROR ===');
     logger.error('Google OAuth callback error:', error.message);

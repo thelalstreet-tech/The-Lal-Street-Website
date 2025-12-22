@@ -196,10 +196,18 @@ export const getCurrentUser = async (): Promise<User | null> => {
     }
     // If no token, backend will read from httpOnly cookies
 
+    console.log('Fetching user from /api/auth/me', {
+      hasToken: !!token,
+      apiUrl: `${API_BASE_URL}/api/auth/me`,
+      credentials: 'include'
+    });
+
     const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
       headers,
       credentials: 'include', // Important: sends cookies with request
     });
+
+    console.log('Response status:', response.status, response.statusText);
 
     if (response.status === 401) {
       // Token expired, try to refresh
