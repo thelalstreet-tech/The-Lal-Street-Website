@@ -103,10 +103,14 @@ if (googleOAuthConfigured) {
   logger.info(`Environment check - RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'NOT SET'}`);
   
   // Configure Google OAuth Strategy
+  // Note: The callbackURL must match EXACTLY what's in Google Cloud Console
+  // including protocol (https), domain, path, and no trailing slash
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: callbackURL
+    callbackURL: callbackURL,
+    // Ensure redirect_uri is included in token exchange
+    passReqToCallback: false
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const user = await User.findOrCreateGoogleUser(profile);
@@ -199,12 +203,31 @@ router.get('/google/callback', (req, res, next) => {
       });
       // Check for specific error types
       if (err.code === 'invalid_grant') {
-        logger.error('INVALID_GRANT ERROR - This usually means:');
-        logger.error('1. Redirect URI mismatch between authorization and token exchange');
-        logger.error('2. Authorization code expired or already used');
-        logger.error('3. Client ID/Secret mismatch');
-        logger.error(`Configured callback URL: ${process.env.GOOGLE_CALLBACK_URL || 'Not set - check constructed URL'}`);
-        logger.error(`Request callback URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+        logger.error('═══════════════════════════════════════════════════════');
+        logger.error('INVALID_GRANT ERROR - DIAGNOSTIC INFORMATION');
+        logger.error('═══════════════════════════════════════════════════════');
+        logger.error('This error usually means:');
+        logger.error('1. Redirect URI mismatch - The redirect_uri in token exchange must match authorization');
+        logger.error('2. Authorization code expired (codes expire in ~10 minutes)');
+        logger.error('3. Authorization code already used');
+        logger.error('4. Client ID/Secret mismatch');
+        logger.error('');
+        logger.error('Current Configuration:');
+        logger.error(`  GOOGLE_CALLBACK_URL env var: ${process.env.GOOGLE_CALLBACK_URL || 'NOT SET'}`);
+        logger.error(`  SERVER_URL env var: ${process.env.SERVER_URL || 'NOT SET'}`);
+        logger.error(`  RENDER_EXTERNAL_URL env var: ${process.env.RENDER_EXTERNAL_URL || 'NOT SET'}`);
+        logger.error(`  Configured callback URL: ${configuredCallbackURL}`);
+        logger.error(`  Request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+        logger.error(`  Request path: ${req.path}`);
+        logger.error('');
+        logger.error('ACTION REQUIRED:');
+        logger.error('1. Go to Google Cloud Console → APIs & Services → Credentials');
+        logger.error('2. Find your OAuth 2.0 Client ID');
+        logger.error('3. Under "Authorized redirect URIs", ensure this EXACT URL is listed:');
+        logger.error(`   ${configuredCallbackURL}`);
+        logger.error('4. The URL must match EXACTLY (case-sensitive, no trailing slash, must be https://)');
+        logger.error('5. Save changes and wait 1-2 minutes for propagation');
+        logger.error('═══════════════════════════════════════════════════════');
       }
       if (err.message && err.message.includes('redirect_uri_mismatch')) {
         logger.error('CALLBACK URL MISMATCH! Check that GOOGLE_CALLBACK_URL matches Google Cloud Console');
