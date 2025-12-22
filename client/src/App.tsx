@@ -93,14 +93,18 @@ export default function App() {
     setShowLoginModal(false);
   };
 
-  // Reset dismissal when user logs in
+  // Reset dismissal when user logs in and close popup
   useEffect(() => {
     if (isAuthenticated) {
       sessionStorage.removeItem('loginPopupDismissed');
       localStorage.removeItem('siteVisitStartTime');
       setShowLoginModal(false);
+      // Force close any open modals
+      if (showLoginModal) {
+        setShowLoginModal(false);
+      }
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, showLoginModal]);
 
   // Handle URL hash for direct navigation (including admin access via #admin)
   useEffect(() => {
