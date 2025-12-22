@@ -16,7 +16,9 @@ const app = express();
 
 // Trust proxy - Required for Render and other hosting platforms
 // This allows Express to properly read X-Forwarded-For headers for rate limiting
-app.set('trust proxy', true);
+// Reads TRUST_PROXY env variable (number of proxy hops to trust), defaults to 1
+const trustProxyCount = parseInt(process.env.TRUST_PROXY, 10) || 1;
+app.set('trust proxy', trustProxyCount);
 
 // Track server stats
 let requestCount = 0;
