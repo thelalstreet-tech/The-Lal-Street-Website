@@ -4,8 +4,11 @@
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
+const passport = require('passport');
 require('dotenv').config(); // Loads .env variables
 const calculatorRoutes = require('./routes/calculator.routes.js');
+const connectDB = require('./config/database');
 const logger = require('./utils/logger');
 
 // Initialize the express app
@@ -50,6 +53,11 @@ app.use(cors({
 // This middleware allows our server to understand JSON data sent in request bodies.
 // We'll need this for our calculator forms later.
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // Request counter middleware
 app.use((req, res, next) => {
@@ -73,8 +81,10 @@ const apiLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in headers
   legacyHeaders: false,
-  // Skip rate limiting for health check
-  skip: (req) => req.path === '/api/health'
+  // Skip rate limiting for health check and auth status check
+  skip: (req) => {
+    return req.path === '/api/health' || req.path === '/api/auth/me';
+  }
 });
 
 // More strict rate limit for expensive calculator operations
@@ -104,6 +114,10 @@ app.use('/api/funds', fundsRoutes);
 const suggestedBucketsRoutes = require('./routes/suggestedBuckets.routes.js');
 app.use('/api/suggested-buckets', suggestedBucketsRoutes);
 
+// Auth routes
+const authRoutes = require('./routes/auth.routes.js');
+app.use('/api/auth', authRoutes);
+
 // Enhanced health check route with server statistics
 app.get('/api/health', (req, res) => {
   const uptime = Math.floor((Date.now() - startTime) / 1000);
@@ -129,8 +143,40 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Debug endpoint to check environment variables (remove in production)
+app.get('/api/debug/env', (req, res) => {
+  res.json({
+    hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
+    hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
+    googleClientIdLength: process.env.GOOGLE_CLIENT_ID?.length || 0,
+    googleClientSecretLength: process.env.GOOGLE_CLIENT_SECRET?.length || 0,
+    hasMongoDB: !!process.env.MONGODB_URI,
+    hasJWTSecret: !!process.env.JWT_SECRET,
+    nodeEnv: process.env.NODE_ENV,
+    // Don't expose actual secrets, just show if they exist
+    googleClientIdPreview: process.env.GOOGLE_CLIENT_ID ? 
+      process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...' : 'NOT SET',
+    allEnvKeys: Object.keys(process.env).filter(key => 
+      key.includes('GOOGLE') || key.includes('MONGODB') || key.includes('JWT')
+    )
+  });
+});
 
 
+
+
+// --- Connect to Database ---
+// Connect to MongoDB before starting server (non-blocking)
+connectDB().then((connected) => {
+  if (connected) {
+    logger.info('Database connection established');
+  } else {
+    logger.warn('Database connection not available. Some features may be disabled.');
+  }
+}).catch((error) => {
+  logger.error('Failed to connect to MongoDB:', error);
+  logger.warn('Server will continue, but authentication features will be disabled.');
+});
 
 // --- Start the Server ---
 // Get the port from the .env file, or default to 5000

@@ -6,6 +6,9 @@ import { RetirementPlanPage } from './components/RetirementPlanPage';
 import { FinancialPlanningPage } from './components/FinancialPlanningPage';
 import { AdminPage } from './components/AdminPage';
 import { Footer } from './components/Footer';
+import { LoginModal } from './components/LoginModal';
+import { useAuth } from './contexts/AuthContext';
+import { useIdleTimer } from './hooks/useIdleTimer';
 import type { Bucket } from './types/bucket';
 import type { SuggestedBucket } from './types/suggestedBucket';
 
@@ -44,11 +47,44 @@ const distributeWeightage = (count: number): number[] => {
 };
 
 export default function App() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  
   // Separate fund selections for Investment and Retirement plans
   const [investmentFunds, setInvestmentFunds] = useState<SelectedFund[]>([]);
   const [retirementFunds, setRetirementFunds] = useState<SelectedFund[]>([]);
   const [activePage, setActivePage] = useState<PageType>('home');
   const [buckets, setBuckets] = useState<Bucket[]>([]);
+  
+  // Login modal state
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // 2-minute popup logic
+  useIdleTimer({
+    onIdle: () => {
+      // Only show popup if user is not authenticated and not already showing
+      if (!isAuthenticated && !showLoginModal && !authLoading) {
+        setShowLoginModal(true);
+      }
+    },
+    idleTime: 2 * 60 * 1000, // 2 minutes
+    enabled: !isAuthenticated && !authLoading, // Only track if not authenticated
+  });
+
+  // Handle login modal dismissal
+  const handleDismissLogin = () => {
+    // Mark as dismissed for this session
+    sessionStorage.setItem('loginPopupDismissed', 'true');
+    setShowLoginModal(false);
+  };
+
+  // Reset dismissal when user logs in
+  useEffect(() => {
+    if (isAuthenticated) {
+      sessionStorage.removeItem('loginPopupDismissed');
+      localStorage.removeItem('siteVisitStartTime');
+      setShowLoginModal(false);
+    }
+  }, [isAuthenticated]);
 
   // Handle URL hash for direct navigation (including admin access via #admin)
   useEffect(() => {
@@ -277,6 +313,13 @@ export default function App() {
           ·
         </button>
       )}
+
+      {/* Login Modal - Shows after 2 minutes or when manually triggered */}
+      <LoginModal
+        open={showLoginModal}
+        onClose={() => setShowLoginModal(false)}
+        onDismiss={handleDismissLogin}
+      />
     </div>
   );
 }
