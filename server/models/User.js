@@ -142,15 +142,25 @@ userSchema.statics.findOrCreateGoogleUser = async function(profile) {
                  (profile.name ? `${profile.name.givenName || ''} ${profile.name.familyName || ''}`.trim() : 'User') ||
                  email.split('@')[0];
     
-    user = await this.create({
-      email: email,
-      name: name || 'User',
-      picture: profile.photos && profile.photos[0]?.value ? profile.photos[0].value : null,
-      googleId: profile.id,
-      authProvider: 'google',
-      lastLoginAt: new Date()
-    });
+    // Log user creation attempt
+    console.log('Creating new Google user:', { email, name, googleId: profile.id });
+    
+    try {
+      user = await this.create({
+        email: email,
+        name: name || 'User',
+        picture: profile.photos && profile.photos[0]?.value ? profile.photos[0].value : null,
+        googleId: profile.id,
+        authProvider: 'google',
+        lastLoginAt: new Date()
+      });
 
+      console.log('New Google user created successfully:', { userId: user._id, email: user.email });
+    } catch (createError) {
+      console.error('Error creating Google user:', createError);
+      console.error('User data:', { email, name, googleId: profile.id });
+      throw createError;
+    }
     return user;
   } catch (error) {
     throw error;

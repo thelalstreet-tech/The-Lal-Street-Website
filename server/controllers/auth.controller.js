@@ -227,17 +227,25 @@ const googleCallback = async (req, res) => {
     const user = req.user; // Set by passport middleware
 
     if (!user) {
-      logger.warn('Google OAuth callback: No user object in request');
+      logger.error('Google OAuth callback: No user object in request');
+      logger.error('Request user:', req.user);
+      logger.error('Request session:', req.session);
       const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
     
     // Validate user data
     if (!user.email || !user._id) {
-      logger.error('Google OAuth callback: Invalid user data', { userId: user._id, email: user.email });
+      logger.error('Google OAuth callback: Invalid user data', { 
+        userId: user._id, 
+        email: user.email,
+        userObject: JSON.stringify(user)
+      });
       const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
+    
+    logger.info(`Google OAuth callback: User authenticated - ${user.email} (${user._id})`);
 
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user);

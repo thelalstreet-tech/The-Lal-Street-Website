@@ -76,6 +76,15 @@ export default function App() {
     idleTime: 1 * 60 * 1000, // 1 minute
     enabled: !isAuthenticated && !authLoading, // Only track if not authenticated
   });
+  
+  // Immediately close popup when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && showLoginModal) {
+      setShowLoginModal(false);
+      sessionStorage.removeItem('loginPopupDismissed');
+      localStorage.removeItem('siteVisitStartTime');
+    }
+  }, [isAuthenticated, showLoginModal]);
 
   // Handle login modal dismissal
   const handleDismissLogin = () => {

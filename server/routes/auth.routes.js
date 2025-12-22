@@ -130,10 +130,30 @@ if (googleOAuthConfigured) {
     passReqToCallback: false
   }, async (accessToken, refreshToken, profile, done) => {
     try {
+      logger.info('Google OAuth profile received:', {
+        id: profile.id,
+        email: profile.emails?.[0]?.value,
+        displayName: profile.displayName,
+        hasPhotos: !!profile.photos?.[0]?.value
+      });
+      
       const user = await User.findOrCreateGoogleUser(profile);
+      
+      if (!user) {
+        logger.error('User creation returned null/undefined');
+        return done(new Error('Failed to create or find user'), null);
+      }
+      
+      logger.info(`User successfully created/found: ${user.email} (ID: ${user._id})`);
       return done(null, user);
     } catch (error) {
       logger.error('Google OAuth user creation error:', error);
+      logger.error('Error stack:', error.stack);
+      logger.error('Profile data:', {
+        id: profile?.id,
+        email: profile?.emails?.[0]?.value,
+        displayName: profile?.displayName
+      });
       return done(error, null);
     }
   }));

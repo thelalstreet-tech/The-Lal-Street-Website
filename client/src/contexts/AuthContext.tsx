@@ -137,11 +137,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return;
     }
 
-    // Clean URL if there were any params (but don't fetch user again - initializeAuth handles it)
+    // If OAuth callback succeeded (no error), refresh user data
+    // This ensures we get the user immediately after OAuth redirect
     if (window.location.search && !error) {
+      // Small delay to ensure cookies are set by backend
+      setTimeout(async () => {
+        try {
+          const currentUser = await getCurrentUser();
+          if (currentUser) {
+            logger.log('User authenticated after OAuth callback:', currentUser.email);
+            setUser(currentUser);
+          }
+        } catch (error) {
+          logger.log('Error fetching user after OAuth callback:', error);
+        }
+      }, 500);
+      
+      // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   const register = useCallback(async (email: string, password: string, name: string) => {
     const response = await registerUser(email, password, name);
