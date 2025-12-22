@@ -164,6 +164,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback(async () => {
     await logoutUser();
     setUser(null);
+    // Clear session dismissal flag so login popup can show on next visit
+    sessionStorage.removeItem('loginPopupDismissed');
+    // Clear visit start time so timer resets
+    localStorage.removeItem('siteVisitStartTime');
   }, []);
 
   const refreshUser = useCallback(async () => {

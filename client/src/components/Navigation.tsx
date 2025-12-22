@@ -23,6 +23,7 @@ interface NavigationProps {
 export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: NavigationProps) {
   const { user, isAuthenticated, logout, isLoading } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
@@ -113,38 +114,52 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                     <span>Login</span>
                   </Button>
                 ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                        <Avatar className="h-9 w-9 border-2 border-blue-500">
-                          {user?.picture && (
-                            <AvatarImage src={user.picture} alt={user.name} />
-                          )}
-                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
-                            {user?.name ? getUserInitials(user.name) : 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel className="font-normal">
-                        <div className="flex flex-col space-y-1">
-                          <p className="text-sm font-medium leading-none">{user?.name}</p>
-                          <p className="text-xs leading-none text-muted-foreground">
-                            {user?.email}
-                          </p>
-                        </div>
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={handleLogout}
-                        className="text-red-600 focus:text-red-600 cursor-pointer"
+                  <div 
+                    className="relative group"
+                    onMouseEnter={() => setShowProfileDropdown(true)}
+                    onMouseLeave={() => setShowProfileDropdown(false)}
+                  >
+                    <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
+                      <DropdownMenuTrigger asChild>
+                        <button 
+                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all"
+                          title={user?.email || 'Profile'}
+                        >
+                          <Avatar className="h-9 w-9 border-2 border-blue-500 hover:border-blue-600 transition-colors">
+                            {user?.picture && (
+                              <AvatarImage src={user.picture} alt={user.name} />
+                            )}
+                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
+                              {user?.name ? getUserInitials(user.name) : 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent 
+                        align="end" 
+                        className="w-56"
+                        onMouseEnter={() => setShowProfileDropdown(true)}
+                        onMouseLeave={() => setShowProfileDropdown(false)}
                       >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        <span>Logout</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <DropdownMenuLabel className="font-normal">
+                          <div className="flex flex-col space-y-1">
+                            <p className="text-sm font-medium leading-none">{user?.name}</p>
+                            <p className="text-xs leading-none text-muted-foreground">
+                              {user?.email}
+                            </p>
+                          </div>
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={handleLogout}
+                          className="text-red-600 focus:text-red-600 cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4 mr-2" />
+                          <span>Logout</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 )}
               </>
             )}
@@ -170,38 +185,52 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                     <span className="hidden sm:inline">Login</span>
                   </Button>
                 ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                        <Avatar className="h-8 w-8 border-2 border-blue-500">
-                          {user?.picture && (
-                            <AvatarImage src={user.picture} alt={user.name} />
-                          )}
-                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold">
-                            {user?.name ? getUserInitials(user.name) : 'U'}
-                          </AvatarFallback>
-                        </Avatar>
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel className="font-normal">
-                        <div className="flex flex-col space-y-1">
-                          <p className="text-sm font-medium leading-none">{user?.name}</p>
-                          <p className="text-xs leading-none text-muted-foreground">
-                            {user?.email}
-                          </p>
-                        </div>
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={handleLogout}
-                        className="text-red-600 focus:text-red-600 cursor-pointer"
+                  <div 
+                    className="relative group"
+                    onMouseEnter={() => setShowProfileDropdown(true)}
+                    onMouseLeave={() => setShowProfileDropdown(false)}
+                  >
+                    <DropdownMenu open={showProfileDropdown} onOpenChange={setShowProfileDropdown}>
+                      <DropdownMenuTrigger asChild>
+                        <button 
+                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all"
+                          title={user?.email || 'Profile'}
+                        >
+                          <Avatar className="h-8 w-8 border-2 border-blue-500 hover:border-blue-600 transition-colors">
+                            {user?.picture && (
+                              <AvatarImage src={user.picture} alt={user.name} />
+                            )}
+                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold">
+                              {user?.name ? getUserInitials(user.name) : 'U'}
+                            </AvatarFallback>
+                          </Avatar>
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent 
+                        align="end" 
+                        className="w-56"
+                        onMouseEnter={() => setShowProfileDropdown(true)}
+                        onMouseLeave={() => setShowProfileDropdown(false)}
                       >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        <span>Logout</span>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        <DropdownMenuLabel className="font-normal">
+                          <div className="flex flex-col space-y-1">
+                            <p className="text-sm font-medium leading-none">{user?.name}</p>
+                            <p className="text-xs leading-none text-muted-foreground">
+                              {user?.email}
+                            </p>
+                          </div>
+                        </DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={handleLogout}
+                          className="text-red-600 focus:text-red-600 cursor-pointer"
+                        >
+                          <LogOut className="w-4 h-4 mr-2" />
+                          <span>Logout</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 )}
               </>
             )}

@@ -24,14 +24,24 @@ export const useIdleTimer = ({ onIdle, idleTime, enabled = true }: UseIdleTimerO
     }
 
     // Get or set start time
+    // Only set new start time if user is not logged in and hasn't dismissed popup
     const getStartTime = (): number => {
+      const dismissed = sessionStorage.getItem('loginPopupDismissed');
       const stored = localStorage.getItem('siteVisitStartTime');
-      if (stored) {
+      
+      // If user dismissed popup in this session, don't reset timer
+      if (dismissed && stored) {
         return parseInt(stored, 10);
       }
-      const now = Date.now();
-      localStorage.setItem('siteVisitStartTime', now.toString());
-      return now;
+      
+      // If no stored time or user logged out (dismissal cleared), start fresh
+      if (!stored) {
+        const now = Date.now();
+        localStorage.setItem('siteVisitStartTime', now.toString());
+        return now;
+      }
+      
+      return parseInt(stored, 10);
     };
 
     startTimeRef.current = getStartTime();

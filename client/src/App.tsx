@@ -58,15 +58,22 @@ export default function App() {
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // 2-minute popup logic
+  // 1-minute popup logic - only for new users or users with expired sessions
   useIdleTimer({
     onIdle: () => {
-      // Only show popup if user is not authenticated and not already showing
+      // Only show popup if:
+      // 1. User is not authenticated
+      // 2. Modal is not already showing
+      // 3. Auth is not loading
+      // 4. User hasn't dismissed it for this visit
       if (!isAuthenticated && !showLoginModal && !authLoading) {
-        setShowLoginModal(true);
+        const dismissed = sessionStorage.getItem('loginPopupDismissed');
+        if (!dismissed) {
+          setShowLoginModal(true);
+        }
       }
     },
-    idleTime: 2 * 60 * 1000, // 2 minutes
+    idleTime: 1 * 60 * 1000, // 1 minute
     enabled: !isAuthenticated && !authLoading, // Only track if not authenticated
   });
 
