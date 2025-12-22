@@ -3,6 +3,7 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 const { generateTokens } = require('../utils/jwt');
 const logger = require('../utils/logger');
+const { getSafeFrontendUrl } = require('../utils/urlValidator');
 
 // Helper to check if database is connected
 const isDatabaseConnected = () => {
@@ -219,18 +220,22 @@ const login = async (req, res) => {
 const googleCallback = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      const frontendUrl = process.env.FRONTEND_URL 
-        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
-        : 'http://localhost:5173';
+      const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=database_unavailable`);
     }
 
     const user = req.user; // Set by passport middleware
 
     if (!user) {
-      const frontendUrl = process.env.FRONTEND_URL 
-        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
-        : 'http://localhost:5173';
+      logger.warn('Google OAuth callback: No user object in request');
+      const frontendUrl = getSafeFrontendUrl();
+      return res.redirect(`${frontendUrl}?error=auth_failed`);
+    }
+    
+    // Validate user data
+    if (!user.email || !user._id) {
+      logger.error('Google OAuth callback: Invalid user data', { userId: user._id, email: user.email });
+      const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
 
@@ -259,14 +264,13 @@ const googleCallback = async (req, res) => {
 
     // Redirect to clean URL (home page) - no tokens in URL
     // Frontend will automatically detect cookies and fetch user info
-    // Get first URL if FRONTEND_URL contains multiple URLs (comma-separated)
-    const frontendUrl = process.env.FRONTEND_URL 
-      ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
-      : 'http://localhost:5173';
+    const frontendUrl = getSafeFrontendUrl();
     res.redirect(frontendUrl);
   } catch (error) {
     logger.error('Google OAuth callback error:', error.message);
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
+    logger.error('Stack trace:', error.stack);
+    const frontendUrl = getSafeFrontendUrl();
+    res.redirect(`${frontendUrl}?error=auth_failed`);
   }
 };
 

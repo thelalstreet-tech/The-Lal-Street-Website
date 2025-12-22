@@ -10,6 +10,16 @@ require('dotenv').config(); // Loads .env variables
 const calculatorRoutes = require('./routes/calculator.routes.js');
 const connectDB = require('./config/database');
 const logger = require('./utils/logger');
+const { validateEnvironment } = require('./utils/envValidator');
+
+// Validate environment variables on startup
+try {
+  validateEnvironment();
+} catch (error) {
+  logger.error('Failed to start server due to environment validation errors:');
+  logger.error(error.message);
+  process.exit(1);
+}
 
 // Initialize the express app
 const app = express();

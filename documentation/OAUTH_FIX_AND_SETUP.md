@@ -25,6 +25,29 @@
 
 **File Changed**: `server/routes/auth.routes.js`
 - Now constructs absolute callback URL from `GOOGLE_CALLBACK_URL`, `SERVER_URL`, or `RENDER_EXTERNAL_URL`
+- Added URL validation to prevent invalid formats
+- Validates callback URL on startup
+
+### 4. ✅ Security Vulnerabilities (Fixed)
+**Problems**: 
+- Open redirect vulnerability in `FRONTEND_URL`
+- Missing CSRF protection
+- Error information disclosure
+- Missing rate limiting on OAuth callback
+
+**Solutions**: 
+- Created `urlValidator.js` utility for secure URL handling
+- Implemented CSRF protection via state parameter
+- Removed sensitive error details from redirect URLs
+- Added rate limiting to OAuth callback endpoint (20 attempts/15 min)
+- Added environment variable validation on startup
+
+**Files Changed**: 
+- `server/routes/auth.routes.js` - Security fixes, CSRF protection
+- `server/controllers/auth.controller.js` - URL validation, error handling
+- `server/utils/urlValidator.js` - NEW: URL validation utility
+- `server/utils/envValidator.js` - NEW: Environment validation utility
+- `server/utils/jwt.js` - Secret validation
 
 ---
 
@@ -81,8 +104,17 @@ FRONTEND_URL=https://your-frontend-domain.vercel.app
 
 # Other required variables
 MONGODB_URI=your-mongodb-connection-string
-JWT_SECRET=your-jwt-secret-key
-JWT_REFRESH_SECRET=your-refresh-token-secret
+JWT_SECRET=your-jwt-secret-key-min-32-characters-long
+JWT_REFRESH_SECRET=your-refresh-token-secret-min-32-characters-long
+JWT_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Frontend URL (validated against ALLOWED_ORIGINS for security)
+FRONTEND_URL=https://your-frontend-domain.vercel.app
+ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app,https://www.thelalstreet.com
+
+# Trust Proxy (optional, defaults to 1)
+TRUST_PROXY=1
 ```
 
 ### Step 3: Verify OAuth Configuration
@@ -164,16 +196,53 @@ If your app is in **Testing** mode, only test users can sign in. To make it publ
 
 ---
 
+## Security Features Implemented
+
+### CSRF Protection
+- State parameter generation using `crypto.randomBytes(32)`
+- State stored in httpOnly cookie
+- Constant-time comparison for state validation
+- State cleared after successful validation
+
+### URL Validation
+- All redirect URLs validated against whitelist
+- Prevents open redirect attacks
+- Validates URL format and protocol
+- Ensures HTTPS in production
+
+### Rate Limiting
+- OAuth callback endpoint: 20 attempts per 15 minutes
+- Prevents brute force attacks
+- Protects against authorization code reuse attempts
+
+### Error Handling
+- Sensitive error details logged server-side only
+- Generic error messages to users
+- Prevents information disclosure
+
+### Environment Validation
+- Validates all critical environment variables on startup
+- Ensures JWT secrets are set in production
+- Validates Google OAuth credentials format
+- Warns about weak secrets
+
 ## Summary of Changes
 
 1. ✅ Fixed rate limiting error by adding `trust proxy`
 2. ✅ Fixed duplicate index warnings in User model
 3. ✅ Fixed OAuth callback URL to use absolute URLs
 4. ✅ Added proper environment variable handling for OAuth
+5. ✅ Implemented CSRF protection (state parameter)
+6. ✅ Added URL validation to prevent open redirects
+7. ✅ Added rate limiting to OAuth callback
+8. ✅ Improved error handling (no sensitive data exposure)
+9. ✅ Added environment variable validation on startup
+10. ✅ Enhanced JWT secret validation
 
 **Next Steps**:
 1. Configure Google OAuth credentials in Google Cloud Console
-2. Set environment variables on Render
+2. Set environment variables on Render (see requirements below)
 3. Ensure callback URL matches exactly
 4. Test OAuth flow
+5. Verify security measures are working (check logs for state validation)
 

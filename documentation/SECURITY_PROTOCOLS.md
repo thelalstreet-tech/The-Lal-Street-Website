@@ -2,7 +2,32 @@
 
 ### 8.1 Authentication
 
-#### 8.1.1 Admin Authentication
+#### 8.1.1 User Authentication (Google OAuth & Email/Password)
+
+**Google OAuth Security:**
+- ✅ CSRF protection via state parameter
+- ✅ State stored in httpOnly cookie
+- ✅ Constant-time comparison for state validation
+- ✅ Rate limiting on callback endpoint (20 attempts/15 min)
+- ✅ URL validation prevents open redirects
+- ✅ Error details not exposed to users
+- ✅ Callback URL validated on startup
+
+**Email/Password Security:**
+- ✅ Passwords hashed with bcrypt (10 salt rounds)
+- ✅ Password validation (minimum 6 characters)
+- ✅ Rate limiting on login/register (3 attempts/15 min)
+- ✅ JWT tokens with expiration
+- ✅ Refresh token mechanism
+
+**Token Security:**
+- ✅ Access tokens: 15 minutes expiry
+- ✅ Refresh tokens: 7 days expiry
+- ✅ Tokens stored in httpOnly cookies
+- ✅ Secure flag in production (HTTPS only)
+- ✅ SameSite: 'lax' for CSRF protection
+
+#### 8.1.2 Admin Authentication
 
 **Method:** Password-based authentication with JWT tokens
 
@@ -373,8 +398,12 @@ app.use((req, res, next) => {
 - [x] Strong admin passwords
 - [x] JWT token implementation
 - [x] Token expiration
-- [ ] Password hashing (if multiple admins)
-- [ ] Refresh token mechanism
+- [x] User password hashing (bcrypt)
+- [x] Refresh token mechanism
+- [x] CSRF protection (OAuth state parameter)
+- [x] URL validation (open redirect prevention)
+- [x] Rate limiting on auth endpoints
+- [x] Environment variable validation
 
 **Authorization:**
 - [x] Protected admin endpoints

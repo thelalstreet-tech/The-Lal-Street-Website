@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const passport = require('passport');
 const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 const {
   register,
   login,
@@ -12,6 +13,7 @@ const {
   logout
 } = require('../controllers/auth.controller');
 const { authenticateToken } = require('../middleware/auth.middleware');
+const { getSafeFrontendUrl, validateCallbackUrl } = require('../utils/urlValidator');
 
 // Rate limiting for auth endpoints
 const authLimiter = rateLimit({
@@ -87,8 +89,8 @@ if (googleOAuthConfigured) {
     }
   }
   
-  // Ensure callback URL is absolute (starts with http:// or https://)
-  if (!callbackURL.startsWith('http://') && !callbackURL.startsWith('https://')) {
+  // Validate callback URL format
+  if (!validateCallbackUrl(callbackURL)) {
     logger.error(`Invalid callback URL format: ${callbackURL}. Must be absolute URL.`);
     callbackURL = 'http://localhost:5000/api/auth/google/callback';
   }
@@ -97,6 +99,12 @@ if (googleOAuthConfigured) {
   if (process.env.NODE_ENV === 'production' && callbackURL.startsWith('http://')) {
     callbackURL = callbackURL.replace('http://', 'https://');
     logger.warn(`Forced HTTPS for callback URL in production: ${callbackURL}`);
+  }
+  
+  // Final validation after HTTPS enforcement
+  if (!validateCallbackUrl(callbackURL)) {
+    logger.error(`Callback URL validation failed after processing: ${callbackURL}`);
+    throw new Error('Invalid callback URL configuration');
   }
   
   // Store the final callback URL for use in route handlers
@@ -167,30 +175,80 @@ router.get('/google', (req, res, next) => {
     logger.warn(`GOOGLE_CLIENT_SECRET: ${process.env.GOOGLE_CLIENT_SECRET ? 'SET' : 'NOT SET'}`);
     return res.status(503).json({
       success: false,
-      message: 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.',
-      debug: {
-        hasClientId: !!process.env.GOOGLE_CLIENT_ID,
-        hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-        clientIdLength: process.env.GOOGLE_CLIENT_ID?.length || 0
-      }
+      message: 'Google OAuth is not configured. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in environment variables.'
     });
   }
+  
+  // Generate state parameter for CSRF protection
+  const state = crypto.randomBytes(32).toString('hex');
+  // Store state in httpOnly cookie for validation on callback
+  res.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 10 * 60 * 1000, // 10 minutes
+    path: '/api/auth' // Only sent for auth routes
+  });
+  
+  // Passport-google-oauth20 will automatically include state in the OAuth request
+  // We'll validate it in the callback
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
-    session: false 
+    session: false
   })(req, res, next);
 });
 
 // GET /api/auth/google/callback - Google OAuth callback
-router.get('/google/callback', (req, res, next) => {
+// Add rate limiting to prevent brute force on callback
+const oauthCallbackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 callback attempts per window
+  message: {
+    success: false,
+    message: 'Too many OAuth callback attempts, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.get('/google/callback', oauthCallbackLimiter, (req, res, next) => {
   // Check at request time
   if (!hasGoogleOAuth()) {
     logger.warn('Google OAuth callback received but credentials not configured');
-      const frontendUrl = process.env.FRONTEND_URL 
-        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
-        : 'http://localhost:5173';
-      return res.redirect(`${frontendUrl}?error=oauth_not_configured`);
+    const frontendUrl = getSafeFrontendUrl();
+    return res.redirect(`${frontendUrl}?error=oauth_not_configured`);
   }
+  
+  // Validate state parameter for CSRF protection
+  const receivedState = req.query.state;
+  const storedState = req.cookies?.oauth_state;
+  
+  if (!receivedState || !storedState) {
+    logger.warn('OAuth state parameter missing - possible CSRF attack or expired session');
+    const frontendUrl = getSafeFrontendUrl();
+    // Clear potentially stale cookie
+    res.clearCookie('oauth_state', { path: '/api/auth' });
+    return res.redirect(`${frontendUrl}?error=oauth_security_error`);
+  }
+  
+  // Use constant-time comparison to prevent timing attacks
+  const stateMatch = crypto.timingSafeEqual(
+    Buffer.from(receivedState, 'utf8'),
+    Buffer.from(storedState, 'utf8')
+  );
+  
+  if (!stateMatch) {
+    logger.warn('OAuth state parameter mismatch - possible CSRF attack', {
+      receivedLength: receivedState?.length,
+      storedLength: storedState?.length
+    });
+    const frontendUrl = getSafeFrontendUrl();
+    res.clearCookie('oauth_state', { path: '/api/auth' });
+    return res.redirect(`${frontendUrl}?error=oauth_security_error`);
+  }
+  
+  // Clear state cookie after successful validation
+  res.clearCookie('oauth_state', { path: '/api/auth' });
   
   // Log callback details for debugging
   logger.info(`Google OAuth callback received. Query params: ${JSON.stringify(req.query)}`);
@@ -316,17 +374,15 @@ router.get('/google/callback', (req, res, next) => {
         logger.error('CALLBACK URL MISMATCH! Check that GOOGLE_CALLBACK_URL matches Google Cloud Console');
         logger.error(`Current callback URL: ${process.env.GOOGLE_CALLBACK_URL || 'Not set - using constructed URL'}`);
       }
-      const frontendUrl = process.env.FRONTEND_URL 
-        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
-        : 'http://localhost:5173';
-      return res.redirect(`${frontendUrl}?error=auth_failed&details=${encodeURIComponent(err.message)}`);
+      const frontendUrl = getSafeFrontendUrl();
+      // Don't expose error details in URL - log them instead
+      logger.error('OAuth error details (not exposed to user):', err.message);
+      return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
     if (!user) {
       logger.warn('Google OAuth authentication failed - no user returned');
       logger.warn('Info:', info);
-      const frontendUrl = process.env.FRONTEND_URL 
-        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
-        : 'http://localhost:5173';
+      const frontendUrl = getSafeFrontendUrl();
       return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
     // Attach user to request and call googleCallback handler directly

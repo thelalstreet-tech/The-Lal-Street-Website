@@ -89,34 +89,63 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 // Static method to find or create user from Google profile
 userSchema.statics.findOrCreateGoogleUser = async function(profile) {
   try {
+    // Validate profile data
+    if (!profile || !profile.id) {
+      throw new Error('Invalid Google profile: missing id');
+    }
+    
+    if (!profile.emails || !profile.emails[0] || !profile.emails[0].value) {
+      throw new Error('Invalid Google profile: missing email');
+    }
+    
+    const email = profile.emails[0].value.toLowerCase().trim();
+    
+    // Validate email format
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      throw new Error(`Invalid email format from Google profile: ${email}`);
+    }
+    
     // Try to find user by googleId
     let user = await this.findOne({ googleId: profile.id });
     
     if (user) {
-      // Update last login
+      // Update last login and picture if changed
       user.lastLoginAt = new Date();
+      if (profile.photos && profile.photos[0]?.value) {
+        user.picture = profile.photos[0].value;
+      }
       await user.save();
       return user;
     }
 
     // Try to find user by email (in case they registered with email first)
-    user = await this.findOne({ email: profile.emails[0].value });
+    user = await this.findOne({ email: email });
     
     if (user) {
       // Link Google account to existing email account
-      user.googleId = profile.id;
-      user.authProvider = 'google'; // Switch to Google auth
-      user.picture = profile.photos[0]?.value || user.picture;
+      // Only if user doesn't already have a googleId
+      if (!user.googleId) {
+        user.googleId = profile.id;
+        user.authProvider = 'google'; // Switch to Google auth
+      }
+      if (profile.photos && profile.photos[0]?.value) {
+        user.picture = profile.photos[0].value;
+      }
       user.lastLoginAt = new Date();
       await user.save();
       return user;
     }
 
     // Create new user
+    const name = profile.displayName || 
+                 (profile.name ? `${profile.name.givenName || ''} ${profile.name.familyName || ''}`.trim() : 'User') ||
+                 email.split('@')[0];
+    
     user = await this.create({
-      email: profile.emails[0].value,
-      name: profile.displayName || profile.name?.givenName + ' ' + profile.name?.familyName,
-      picture: profile.photos[0]?.value || null,
+      email: email,
+      name: name || 'User',
+      picture: profile.photos && profile.photos[0]?.value ? profile.photos[0].value : null,
       googleId: profile.id,
       authProvider: 'google',
       lastLoginAt: new Date()
