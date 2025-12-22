@@ -59,11 +59,21 @@ const hasGoogleOAuth = () => {
 const googleOAuthConfigured = hasGoogleOAuth();
 
 if (googleOAuthConfigured) {
+  // Construct callback URL - must be absolute for Google OAuth
+  let callbackURL = process.env.GOOGLE_CALLBACK_URL;
+  if (!callbackURL) {
+    // Fallback: construct from server URL or use default
+    const serverUrl = process.env.SERVER_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:5000';
+    callbackURL = `${serverUrl}/api/auth/google/callback`;
+  }
+  
+  logger.info(`Google OAuth callback URL: ${callbackURL}`);
+  
   // Configure Google OAuth Strategy
   passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL || '/api/auth/google/callback'
+    callbackURL: callbackURL
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const user = await User.findOrCreateGoogleUser(profile);

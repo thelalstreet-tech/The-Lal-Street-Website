@@ -14,6 +14,10 @@ const logger = require('./utils/logger');
 // Initialize the express app
 const app = express();
 
+// Trust proxy - Required for Render and other hosting platforms
+// This allows Express to properly read X-Forwarded-For headers for rate limiting
+app.set('trust proxy', true);
+
 // Track server stats
 let requestCount = 0;
 let errorCount = 0;
