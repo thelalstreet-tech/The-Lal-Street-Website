@@ -65,12 +65,19 @@ if (googleOAuthConfigured) {
   
   if (!callbackURL) {
     // Try to construct from available environment variables
-    const serverUrl = process.env.SERVER_URL || process.env.RENDER_EXTERNAL_URL;
+    let serverUrl = process.env.SERVER_URL || process.env.RENDER_EXTERNAL_URL;
     
     if (serverUrl) {
       // Ensure serverUrl doesn't have trailing slash
       const cleanServerUrl = serverUrl.replace(/\/$/, '');
-      callbackURL = `${cleanServerUrl}/api/auth/google/callback`;
+      // Force HTTPS in production (Render uses HTTPS)
+      if (process.env.NODE_ENV === 'production' && cleanServerUrl.startsWith('http://')) {
+        serverUrl = cleanServerUrl.replace('http://', 'https://');
+        logger.warn(`Forced HTTPS for callback URL in production: ${serverUrl}`);
+      } else {
+        serverUrl = cleanServerUrl;
+      }
+      callbackURL = `${serverUrl}/api/auth/google/callback`;
     } else {
       // Fallback to localhost for development
       callbackURL = 'http://localhost:5000/api/auth/google/callback';
@@ -83,8 +90,17 @@ if (googleOAuthConfigured) {
     callbackURL = 'http://localhost:5000/api/auth/google/callback';
   }
   
+  // In production, ensure HTTPS (Render always uses HTTPS)
+  if (process.env.NODE_ENV === 'production' && callbackURL.startsWith('http://')) {
+    callbackURL = callbackURL.replace('http://', 'https://');
+    logger.warn(`Forced HTTPS for callback URL in production: ${callbackURL}`);
+  }
+  
   logger.info(`Google OAuth callback URL: ${callbackURL}`);
   logger.info(`Make sure this URL matches exactly in Google Cloud Console: ${callbackURL}`);
+  logger.info(`Environment check - GOOGLE_CALLBACK_URL: ${process.env.GOOGLE_CALLBACK_URL || 'NOT SET'}`);
+  logger.info(`Environment check - SERVER_URL: ${process.env.SERVER_URL || 'NOT SET'}`);
+  logger.info(`Environment check - RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'NOT SET'}`);
   
   // Configure Google OAuth Strategy
   passport.use(new GoogleStrategy({
@@ -162,6 +178,13 @@ router.get('/google/callback', (req, res, next) => {
   
   // Log callback details for debugging
   logger.info(`Google OAuth callback received. Query params: ${JSON.stringify(req.query)}`);
+  logger.info(`Request URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  logger.info(`Full request URL: ${req.url}`);
+  
+  // Get the configured callback URL from the strategy
+  const strategy = passport._strategies.google;
+  const configuredCallbackURL = strategy?._oauth2?._redirectUri || 'Not available';
+  logger.info(`Configured callback URL in strategy: ${configuredCallbackURL}`);
   
   passport.authenticate('google', { 
     session: false
@@ -174,7 +197,15 @@ router.get('/google/callback', (req, res, next) => {
         name: err.name,
         stack: err.stack
       });
-      // Check if it's a callback URL mismatch error
+      // Check for specific error types
+      if (err.code === 'invalid_grant') {
+        logger.error('INVALID_GRANT ERROR - This usually means:');
+        logger.error('1. Redirect URI mismatch between authorization and token exchange');
+        logger.error('2. Authorization code expired or already used');
+        logger.error('3. Client ID/Secret mismatch');
+        logger.error(`Configured callback URL: ${process.env.GOOGLE_CALLBACK_URL || 'Not set - check constructed URL'}`);
+        logger.error(`Request callback URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+      }
       if (err.message && err.message.includes('redirect_uri_mismatch')) {
         logger.error('CALLBACK URL MISMATCH! Check that GOOGLE_CALLBACK_URL matches Google Cloud Console');
         logger.error(`Current callback URL: ${process.env.GOOGLE_CALLBACK_URL || 'Not set - using constructed URL'}`);
