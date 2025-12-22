@@ -107,6 +107,8 @@ if (googleOAuthConfigured) {
   logger.info(`Environment check - GOOGLE_CALLBACK_URL: ${process.env.GOOGLE_CALLBACK_URL || 'NOT SET'}`);
   logger.info(`Environment check - SERVER_URL: ${process.env.SERVER_URL || 'NOT SET'}`);
   logger.info(`Environment check - RENDER_EXTERNAL_URL: ${process.env.RENDER_EXTERNAL_URL || 'NOT SET'}`);
+  logger.info(`Environment check - GOOGLE_CLIENT_ID: ${process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.substring(0, 30) + '...' : 'NOT SET'}`);
+  logger.info(`Environment check - GOOGLE_CLIENT_SECRET: ${process.env.GOOGLE_CLIENT_SECRET ? 'SET (' + process.env.GOOGLE_CLIENT_SECRET.length + ' chars)' : 'NOT SET'}`);
   
   // Configure Google OAuth Strategy
   // Note: The callbackURL must match EXACTLY what's in Google Cloud Console
@@ -184,7 +186,10 @@ router.get('/google/callback', (req, res, next) => {
   // Check at request time
   if (!hasGoogleOAuth()) {
     logger.warn('Google OAuth callback received but credentials not configured');
-    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=oauth_not_configured`);
+      const frontendUrl = process.env.FRONTEND_URL 
+        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
+        : 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}?error=oauth_not_configured`);
   }
   
   // Log callback details for debugging
@@ -292,10 +297,15 @@ router.get('/google/callback', (req, res, next) => {
         logger.error('     - Only test users can authenticate');
         logger.error('     - Consider publishing to "In production" for production use');
         logger.error('');
-        logger.error('STEP 3: Verify Client ID and Secret');
-        logger.error('  1. Ensure GOOGLE_CLIENT_ID matches the Client ID in Google Console');
-        logger.error('  2. Ensure GOOGLE_CLIENT_SECRET matches the Client Secret');
-        logger.error('  3. If you regenerated the secret, update it in Render environment variables');
+        logger.error('STEP 3: Verify Client ID and Secret Match');
+        logger.error('  1. In Google Console, find your Client ID (starts with something like:');
+        logger.error('     xxxxxx.apps.googleusercontent.com)');
+        logger.error(`  2. Check Render environment variable GOOGLE_CLIENT_ID`);
+        logger.error(`     Current (first 30 chars): ${process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.substring(0, 30) + '...' : 'NOT SET'}`);
+        logger.error('  3. They must match EXACTLY');
+        logger.error('  4. Check GOOGLE_CLIENT_SECRET matches the Client Secret in Google Console');
+        logger.error(`     Secret is ${process.env.GOOGLE_CLIENT_SECRET ? 'SET' : 'NOT SET'}`);
+        logger.error('  5. If you regenerated the secret, update it in Render immediately');
         logger.error('');
         logger.error('STEP 4: Test Again');
         logger.error('  - Try the Google login flow again');
@@ -306,12 +316,18 @@ router.get('/google/callback', (req, res, next) => {
         logger.error('CALLBACK URL MISMATCH! Check that GOOGLE_CALLBACK_URL matches Google Cloud Console');
         logger.error(`Current callback URL: ${process.env.GOOGLE_CALLBACK_URL || 'Not set - using constructed URL'}`);
       }
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed&details=${encodeURIComponent(err.message)}`);
+      const frontendUrl = process.env.FRONTEND_URL 
+        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
+        : 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}?error=auth_failed&details=${encodeURIComponent(err.message)}`);
     }
     if (!user) {
       logger.warn('Google OAuth authentication failed - no user returned');
       logger.warn('Info:', info);
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
+      const frontendUrl = process.env.FRONTEND_URL 
+        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
+        : 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
     // Attach user to request and call googleCallback handler directly
     req.user = user;

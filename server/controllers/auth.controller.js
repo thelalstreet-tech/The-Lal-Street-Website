@@ -219,13 +219,19 @@ const login = async (req, res) => {
 const googleCallback = async (req, res) => {
   try {
     if (!isDatabaseConnected()) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=database_unavailable`);
+      const frontendUrl = process.env.FRONTEND_URL 
+        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
+        : 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}?error=database_unavailable`);
     }
 
     const user = req.user; // Set by passport middleware
 
     if (!user) {
-      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
+      const frontendUrl = process.env.FRONTEND_URL 
+        ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
+        : 'http://localhost:5173';
+      return res.redirect(`${frontendUrl}?error=auth_failed`);
     }
 
     // Generate tokens
@@ -253,7 +259,11 @@ const googleCallback = async (req, res) => {
 
     // Redirect to clean URL (home page) - no tokens in URL
     // Frontend will automatically detect cookies and fetch user info
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+    // Get first URL if FRONTEND_URL contains multiple URLs (comma-separated)
+    const frontendUrl = process.env.FRONTEND_URL 
+      ? process.env.FRONTEND_URL.split(',')[0].trim().replace(/['"]/g, '')
+      : 'http://localhost:5173';
+    res.redirect(frontendUrl);
   } catch (error) {
     logger.error('Google OAuth callback error:', error.message);
     res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
