@@ -49,30 +49,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     const initializeAuth = async () => {
       try {
-        // Longer delay after OAuth redirect to ensure cookies are available
-        // This is especially important for OAuth callbacks from Google
-        // Check if we just came from OAuth (no error in URL but might be clean URL)
-        const urlParams = new URLSearchParams(window.location.search);
-        const hasOAuthParams = urlParams.has('code') || urlParams.has('state');
-        const delay = hasOAuthParams ? 1000 : 100; // Longer delay for OAuth
-        await new Promise(resolve => setTimeout(resolve, delay));
+        // Small delay to ensure cookies are available after OAuth redirect
+        // This is especially important for OAuth callbacks
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         // First, try to get user from server (works for both cookies and localStorage tokens)
         // This is the primary method - server reads from cookies or Authorization header
         try {
           const currentUser = await getCurrentUser();
           if (currentUser && isMounted) {
-            // Use functional update to prevent unnecessary re-renders if user hasn't changed
-            setUser(prevUser => {
-              if (prevUser?.id === currentUser.id && prevUser?.email === currentUser.email) {
-                return prevUser; // No change, prevent re-render
-              }
-              return currentUser;
-            });
+            logger.log('User found from server:', currentUser.email);
+            setUser(currentUser);
             setIsLoading(false);
             return; // Success, exit early
           }
         } catch (error) {
+          logger.log('No user from server, checking localStorage...', error);
         }
 
         // Fallback: Check if user is stored locally (for email/password login with localStorage)
@@ -102,6 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               }
             }
           } catch (error) {
+            logger.log('Error verifying user:', error);
             clearTokens();
             setUser(null);
           }
@@ -112,6 +105,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }
       } catch (error) {
+        logger.log('Error initializing auth:', error);
         if (isMounted) {
           clearTokens();
           setUser(null);
@@ -134,80 +128,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get('error');
-    const oauthSuccess = urlParams.get('oauth_success');
-    const token = urlParams.get('token'); // Token passed in URL as fallback
-    const code = urlParams.get('code');
-    const state = urlParams.get('state');
     
     // If there's an error, show it and clean URL
     if (error) {
+      console.error('OAuth error:', error);
       // Clean URL
       window.history.replaceState({}, document.title, window.location.pathname);
       return;
     }
 
-    // Check for OAuth success - either explicit success param or code/state from Google
-    const isOAuthCallback = oauthSuccess === 'true' || code || state;
-    
-    if (isOAuthCallback) {
-      // If token is in URL (fallback for cross-domain cookie issues), store it temporarily
-      if (token) {
-        // Decode token in case it was URL encoded
-        const decodedToken = decodeURIComponent(token);
-        
-        // Store token in localStorage as fallback - use the same key as TOKEN_KEY
-        localStorage.setItem('accessToken', decodedToken);
-        
-        // Clean URL immediately to remove token
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-      
-      // Function to fetch user with retries
-      const fetchUserWithRetry = async (attempt = 1, maxAttempts = 3) => {
-        try {
-          const currentUser = await getCurrentUser();
-          if (currentUser) {
-            // Use functional update to prevent unnecessary re-renders
-            setUser(prevUser => {
-              // Only update if user actually changed to prevent flicker
-              if (prevUser?.id !== currentUser.id || prevUser?.email !== currentUser.email) {
-                return currentUser;
-              }
-              return prevUser;
-            });
-            setIsLoading(false);
-            // Clean URL after successful fetch
-            window.history.replaceState({}, document.title, window.location.pathname);
-            return true;
-          } else {
-            if (attempt < maxAttempts) {
-              // Retry with exponential backoff
-              const delay = attempt * 1000; // 1s, 2s, 3s
-              setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
-            } else {
-              setIsLoading(false);
-              // Clean URL even on failure
-              window.history.replaceState({}, document.title, window.location.pathname);
-              return false;
-            }
-          }
-        } catch (error) {
-          if (attempt < maxAttempts) {
-            const delay = attempt * 1000;
-            setTimeout(() => fetchUserWithRetry(attempt + 1, maxAttempts), delay);
-          } else {
-            setIsLoading(false);
-            window.history.replaceState({}, document.title, window.location.pathname);
-            return false;
-          }
-        }
-      };
-      
-      // Start fetching user after a short delay to ensure token is stored
-      setTimeout(() => fetchUserWithRetry(), 100);
+    // Clean URL if there were any params (but don't fetch user again - initializeAuth handles it)
+    if (window.location.search && !error) {
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount
+  }, []);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
     const response = await registerUser(email, password, name);
@@ -230,10 +164,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback(async () => {
     await logoutUser();
     setUser(null);
-    // Clear session dismissal flag so login popup can show on next visit
-    sessionStorage.removeItem('loginPopupDismissed');
-    // Clear visit start time so timer resets
-    localStorage.removeItem('siteVisitStartTime');
   }, []);
 
   const refreshUser = useCallback(async () => {

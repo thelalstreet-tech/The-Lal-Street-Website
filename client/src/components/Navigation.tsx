@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Home, BarChart3, Target, FileText, LogIn, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { Home, BarChart3, Target, FileText, Brain, BookOpen, LogIn, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -23,124 +23,95 @@ interface NavigationProps {
 export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: NavigationProps) {
   const { user, isAuthenticated, logout, isLoading } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showProfileDropdownDesktop, setShowProfileDropdownDesktop] = useState(false);
-  const [showProfileDropdownMobile, setShowProfileDropdownMobile] = useState(false);
 
-  const navItems = useMemo(() => [
+  const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'investment-plan', label: 'Investment Plan', icon: BarChart3 },
     { id: 'retirement-plan', label: 'Retirement Plan', icon: Target },
     { id: 'financial-planning', label: 'Financial Planning', icon: FileText },
-  ], []);
+    { id: 'ai-stock-analysis', label: 'AI Stock Analysis', icon: Brain },
+    { id: 'blogs', label: 'Blogs', icon: BookOpen },
+  ];
 
-  const handleNavClick = useCallback((pageId: string) => {
+  const handleNavClick = (pageId: string) => {
     onNavigate(pageId);
-  }, [onNavigate]);
+  };
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = async () => {
     await logout();
-  }, [logout]);
+  };
 
-  // Get user initials for avatar fallback - memoized
-  const getUserInitials = useCallback((name: string) => {
-    if (!name) return 'U';
+  // Get user initials for avatar fallback
+  const getUserInitials = (name: string) => {
     return name
       .split(' ')
       .map(n => n[0])
       .join('')
       .toUpperCase()
       .slice(0, 2);
-  }, []);
-
-  // Memoize user initials to prevent recalculation
-  const userInitials = useMemo(() => {
-    return user?.name ? getUserInitials(user.name) : 'U';
-  }, [user?.name, getUserInitials]);
-
-  // Memoize dropdown handlers to prevent recreation on every render
-  // Use refs to track hover state and cancel timeouts
-  const desktopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mobileTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleMouseEnterDesktop = useCallback(() => {
-    // Cancel any pending close
-    if (desktopTimeoutRef.current) {
-      clearTimeout(desktopTimeoutRef.current);
-      desktopTimeoutRef.current = null;
-    }
-    setShowProfileDropdownDesktop(true);
-  }, []);
-
-  const handleMouseLeaveDesktop = useCallback(() => {
-    // Delay closing to allow moving cursor to dropdown content
-    desktopTimeoutRef.current = setTimeout(() => {
-      setShowProfileDropdownDesktop(false);
-      desktopTimeoutRef.current = null;
-    }, 200);
-  }, []);
-
-  const handleMouseEnterMobile = useCallback(() => {
-    // Cancel any pending close
-    if (mobileTimeoutRef.current) {
-      clearTimeout(mobileTimeoutRef.current);
-      mobileTimeoutRef.current = null;
-    }
-    setShowProfileDropdownMobile(true);
-  }, []);
-
-  const handleMouseLeaveMobile = useCallback(() => {
-    // Delay closing to allow moving cursor to dropdown content
-    mobileTimeoutRef.current = setTimeout(() => {
-      setShowProfileDropdownMobile(false);
-      mobileTimeoutRef.current = null;
-    }, 200);
-  }, []);
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (desktopTimeoutRef.current) {
-        clearTimeout(desktopTimeoutRef.current);
-      }
-      if (mobileTimeoutRef.current) {
-        clearTimeout(mobileTimeoutRef.current);
-      }
-    };
-  }, []);
+  };
 
   return (
-    <nav className="bg-white border-b border-slate-300 shadow-md sticky top-0 z-50 will-change-transform pointer-events-auto">
+    <nav className="bg-white border-b border-slate-300 shadow-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-14">
           {/* Logo */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5">
             <img 
               src="/logo.png" 
               alt="The Lal Street" 
-              className="h-20 sm:h-20 md:h-24 w-auto object-contain"
+              className="h-14 sm:h-16 md:h-20 w-auto object-contain"
             />
             <div className="hidden sm:block">
-              <p className="text-xs text-slate-500">Portfolio Analysis & Investment Calculator</p>
+              <p className="text-[10px] sm:text-xs text-slate-500 leading-tight">Portfolio Analysis & Investment Calculator</p>
             </div>
           </div>
 
           {/* Desktop Navigation Items */}
-          <div className="hidden md:flex items-center gap-2">
+          <div className="hidden lg:flex items-center gap-1.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activePage === item.id;
               return (
                 <Button
                   key={item.id}
-                  variant={isActive ? 'default' : 'ghost'}
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleNavClick(item.id)}
                   className={cn(
-                    'flex items-center gap-2',
-                    isActive && 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+                    'flex items-center gap-1.5 px-3 py-1.5 h-8 text-xs font-medium transition-all duration-200',
+                    isActive 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:from-blue-700 hover:to-indigo-700' 
+                      : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50 hover:scale-105'
                   )}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="whitespace-nowrap">{item.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+
+          {/* Tablet Navigation Items (Medium screens - show fewer items) */}
+          <div className="hidden md:flex lg:hidden items-center gap-1">
+            {navItems.slice(0, 4).map((item) => {
+              const Icon = item.icon;
+              const isActive = activePage === item.id;
+              return (
+                <Button
+                  key={item.id}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleNavClick(item.id)}
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-1 h-7 text-[10px] font-medium transition-all duration-200',
+                    isActive 
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md' 
+                      : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                  )}
+                >
+                  <Icon className="w-3 h-3" />
+                  <span className="whitespace-nowrap">{item.label}</span>
                 </Button>
               );
             })}
@@ -160,74 +131,51 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
           )}
 
           {/* Auth Section - Desktop */}
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
             {!isLoading && (
               <>
                 {!isAuthenticated ? (
                   <Button
                     onClick={() => setShowLoginModal(true)}
-                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                    size="sm"
+                    className="flex items-center gap-1.5 px-3 py-1.5 h-8 text-xs font-medium bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105"
                   >
-                    <LogIn className="w-4 h-4" />
+                    <LogIn className="w-3.5 h-3.5" />
                     <span>Login</span>
                   </Button>
                 ) : (
-                  <div 
-                    className="relative group"
-                    onMouseEnter={handleMouseEnterDesktop}
-                    onMouseLeave={handleMouseLeaveDesktop}
-                  >
-                    <DropdownMenu open={showProfileDropdownDesktop} onOpenChange={setShowProfileDropdownDesktop}>
-                      <DropdownMenuTrigger asChild>
-                        <button 
-                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all z-50"
-                          title={user?.email || 'Profile'}
-                          type="button"
-                        >
-                          <Avatar className="h-9 w-9 border-2 border-blue-500 hover:border-blue-600 transition-colors pointer-events-auto">
-                            {user?.picture && (
-                              <AvatarImage 
-                                src={user.picture} 
-                                alt={user.name || 'User'} 
-                                loading="lazy"
-                                onError={(e) => {
-                                  // Hide image on error, show fallback
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
-                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
-                              {userInitials}
-                            </AvatarFallback>
-                          </Avatar>
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent 
-                        align="end" 
-                        className="w-56 z-[100] pointer-events-auto"
-                        onMouseEnter={handleMouseEnterDesktop}
-                        onMouseLeave={handleMouseLeaveDesktop}
-                        sideOffset={5}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        <Avatar className="h-9 w-9 border-2 border-blue-500">
+                          {user?.picture && (
+                            <AvatarImage src={user.picture} alt={user.name} />
+                          )}
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-semibold">
+                            {user?.name ? getUserInitials(user.name) : 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm font-medium leading-none">{user?.name}</p>
+                          <p className="text-xs leading-none text-muted-foreground">
+                            {user?.email}
+                          </p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleLogout}
+                        className="text-red-600 focus:text-red-600 cursor-pointer"
                       >
-                        <DropdownMenuLabel className="font-normal">
-                          <div className="flex flex-col space-y-1">
-                            <p className="text-sm font-medium leading-none">{user?.name}</p>
-                            <p className="text-xs leading-none text-muted-foreground">
-                              {user?.email}
-                            </p>
-                          </div>
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={handleLogout}
-                          className="text-red-600 focus:text-red-600 cursor-pointer"
-                        >
-                          <LogOut className="w-4 h-4 mr-2" />
-                          <span>Logout</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                        <LogOut className="w-4 h-4 mr-2" />
+                        <span>Logout</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </>
             )}
@@ -253,62 +201,38 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                     <span className="hidden sm:inline">Login</span>
                   </Button>
                 ) : (
-                  <div 
-                    className="relative group"
-                    onMouseEnter={handleMouseEnterMobile}
-                    onMouseLeave={handleMouseLeaveMobile}
-                  >
-                    <DropdownMenu open={showProfileDropdownMobile} onOpenChange={setShowProfileDropdownMobile}>
-                      <DropdownMenuTrigger asChild>
-                        <button 
-                          className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:ring-2 hover:ring-blue-300 transition-all z-50"
-                          title={user?.email || 'Profile'}
-                          type="button"
-                        >
-                          <Avatar className="h-8 w-8 border-2 border-blue-500 hover:border-blue-600 transition-colors pointer-events-auto">
-                            {user?.picture && (
-                              <AvatarImage 
-                                src={user.picture} 
-                                alt={user.name || 'User'} 
-                                loading="lazy"
-                                onError={(e) => {
-                                  // Hide image on error, show fallback
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            )}
-                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold">
-                              {userInitials}
-                            </AvatarFallback>
-                          </Avatar>
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent 
-                        align="end" 
-                        className="w-56 z-[100] pointer-events-auto"
-                        onMouseEnter={handleMouseEnterMobile}
-                        onMouseLeave={handleMouseLeaveMobile}
-                        sideOffset={5}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                        <Avatar className="h-8 w-8 border-2 border-blue-500">
+                          {user?.picture && (
+                            <AvatarImage src={user.picture} alt={user.name} />
+                          )}
+                          <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white text-xs font-semibold">
+                            {user?.name ? getUserInitials(user.name) : 'U'}
+                          </AvatarFallback>
+                        </Avatar>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="font-normal">
+                        <div className="flex flex-col space-y-1">
+                          <p className="text-sm font-medium leading-none">{user?.name}</p>
+                          <p className="text-xs leading-none text-muted-foreground">
+                            {user?.email}
+                          </p>
+                        </div>
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={handleLogout}
+                        className="text-red-600 focus:text-red-600 cursor-pointer"
                       >
-                        <DropdownMenuLabel className="font-normal">
-                          <div className="flex flex-col space-y-1">
-                            <p className="text-sm font-medium leading-none">{user?.name}</p>
-                            <p className="text-xs leading-none text-muted-foreground">
-                              {user?.email}
-                            </p>
-                          </div>
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={handleLogout}
-                          className="text-red-600 focus:text-red-600 cursor-pointer"
-                        >
-                          <LogOut className="w-4 h-4 mr-2" />
-                          <span>Logout</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                        <LogOut className="w-4 h-4 mr-2" />
+                        <span>Logout</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </>
             )}
@@ -317,7 +241,7 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
 
         {/* Mobile Bottom Navigation Bar (Always Visible) */}
         <div className="md:hidden border-t border-slate-200 bg-white">
-          <div className="flex items-center justify-around py-2">
+          <div className="flex items-center justify-around py-1.5 px-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = activePage === item.id;
@@ -326,14 +250,14 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
                   className={cn(
-                    'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors',
+                    'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-md transition-all duration-200 flex-1 max-w-[80px]',
                     isActive 
-                      ? 'text-blue-600 bg-blue-50' 
-                      : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                      ? 'text-blue-600 bg-blue-50 scale-105' 
+                      : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50 active:scale-95'
                   )}
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-xs font-medium">{item.label}</span>
+                  <Icon className="w-4 h-4" />
+                  <span className="text-[10px] font-medium leading-tight text-center">{item.label}</span>
                 </button>
               );
             })}

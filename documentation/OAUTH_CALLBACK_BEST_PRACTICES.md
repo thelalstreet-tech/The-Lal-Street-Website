@@ -18,9 +18,6 @@ Backend redirects to: /auth/callback?accessToken=xxx&refreshToken=yyy&success=tr
 - ❌ Tokens can be leaked via referrer headers
 - ❌ Tokens stored in localStorage (accessible to JavaScript/XSS)
 - ❌ Messy URL with sensitive data
-- ❌ No CSRF protection
-- ❌ Open redirect vulnerability
-- ❌ No rate limiting on callback
 
 ### After (✅ Secure)
 ```
@@ -32,10 +29,6 @@ Backend sets httpOnly cookies → Redirects to clean URL: /
 - ✅ No tokens in browser history
 - ✅ Protected from XSS attacks
 - ✅ Automatic cookie management
-- ✅ CSRF protection via state parameter
-- ✅ URL validation prevents open redirects
-- ✅ Rate limiting on OAuth callback (20 attempts/15 min)
-- ✅ Error details not exposed to users
 
 ---
 
@@ -55,18 +48,6 @@ Backend sets httpOnly cookies → Redirects to clean URL: /
 - `httpOnly: true` - Prevents JavaScript access
 - `secure: true` - HTTPS only (production)
 - `sameSite: 'lax'` - CSRF protection
-
-### 4. **CSRF Protection**
-- State parameter generated using `crypto.randomBytes(32)`
-- State stored in httpOnly cookie
-- Validated on callback using constant-time comparison
-- Prevents cross-site request forgery attacks
-
-### 5. **URL Validation**
-- All redirect URLs validated against whitelist
-- Prevents open redirect vulnerabilities
-- Validates URL format and protocol
-- Ensures HTTPS in production
 
 ### 4. **Token Storage Strategy**
 - **Access Token**: Short-lived (15 min), in httpOnly cookie
@@ -91,16 +72,13 @@ Backend sets httpOnly cookies → Redirects to clean URL: /
 
 3. **Google redirects back**
    ```
-   GET /api/auth/google/callback?code=xxx&state=yyy
+   GET /api/auth/google/callback?code=xxx
    ```
 
 4. **Backend processes callback**
-   - **Validates state parameter** (CSRF protection)
-   - **Rate limiting check** (20 attempts/15 min)
    - Creates/updates user
    - Generates JWT tokens
    - **Sets httpOnly cookies** (accessToken, refreshToken)
-   - **Validates redirect URL** against whitelist
    - **Redirects to clean URL**: `/` (home page)
 
 5. **Frontend detects login**

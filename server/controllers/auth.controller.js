@@ -3,7 +3,6 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 const { generateTokens } = require('../utils/jwt');
 const logger = require('../utils/logger');
-const { getSafeFrontendUrl } = require('../utils/urlValidator');
 
 // Helper to check if database is connected
 const isDatabaseConnected = () => {
@@ -219,122 +218,45 @@ const login = async (req, res) => {
  */
 const googleCallback = async (req, res) => {
   try {
-    logger.info('=== googleCallback Controller START ===');
-    logger.info('Request user:', req.user ? 'Present' : 'Missing');
-    
     if (!isDatabaseConnected()) {
-      logger.error('Database not connected in googleCallback');
-      const frontendUrl = getSafeFrontendUrl();
-      return res.redirect(`${frontendUrl}?error=database_unavailable`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=database_unavailable`);
     }
 
     const user = req.user; // Set by passport middleware
 
     if (!user) {
-      logger.error('Google OAuth callback: No user object in request');
-      logger.error('Request user:', req.user);
-      logger.error('Request session:', req.session);
-      logger.error('Request body:', req.body);
-      logger.error('Request query:', req.query);
-      const frontendUrl = getSafeFrontendUrl();
-      return res.redirect(`${frontendUrl}?error=auth_failed`);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
     }
-    
-    // Validate user data
-    if (!user.email || !user._id) {
-      logger.error('Google OAuth callback: Invalid user data', { 
-        userId: user._id, 
-        email: user.email,
-        userObject: JSON.stringify(user),
-        userKeys: Object.keys(user || {})
-      });
-      const frontendUrl = getSafeFrontendUrl();
-      return res.redirect(`${frontendUrl}?error=auth_failed`);
-    }
-    
-    logger.info(`✅ Google OAuth callback: User authenticated - ${user.email} (${user._id})`);
-    logger.info('User details:', {
-      email: user.email,
-      name: user.name,
-      authProvider: user.authProvider,
-      googleId: user.googleId
-    });
 
     // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user);
 
     // Set tokens in httpOnly cookies (most secure - tokens never exposed to JavaScript)
-    // Use sameSite: 'none' in production for cross-site redirects (Google OAuth)
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    // Determine cookie domain - if frontend and backend are on different domains,
-    // we need to set domain explicitly or use a shared parent domain
-    // For now, don't set domain (cookies will be set on current domain)
-    // If frontend and backend share a parent domain (e.g., .example.com), set domain to parent
-    const cookieDomain = process.env.COOKIE_DOMAIN || undefined; // e.g., '.thelalstreet.com' for subdomains
-    
     const cookieOptions = {
       httpOnly: true, // Prevents JavaScript access (XSS protection)
-      secure: isProduction, // HTTPS only in production (required for sameSite: 'none')
-      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site redirects in production
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'lax', // CSRF protection
       maxAge: 15 * 60 * 1000, // 15 minutes (matches access token expiry)
-      path: '/', // Root path so cookie is accessible everywhere
-      domain: cookieDomain // Set if frontend and backend share a parent domain
     };
 
     const refreshCookieOptions = {
       httpOnly: true,
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches refresh token expiry)
-      path: '/',
-      domain: cookieDomain
     };
 
     res.cookie('accessToken', accessToken, cookieOptions);
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
-    
-    logger.info('Cookies set with options:', {
-      domain: cookieDomain || 'current domain',
-      sameSite: cookieOptions.sameSite,
-      secure: cookieOptions.secure,
-      path: cookieOptions.path
-    });
 
-    logger.info(`✅ Google OAuth login successful for: ${user.email}`);
-    logger.info('Cookie settings:', {
-      domain: cookieDomain || 'current domain',
-      sameSite: cookieOptions.sameSite,
-      secure: cookieOptions.secure,
-      path: cookieOptions.path
-    });
-    logger.info('=== googleCallback Controller SUCCESS ===');
+    logger.info(`Google OAuth login successful for: ${user.email}`);
 
-    // Redirect to frontend with success parameter so frontend knows login succeeded
-    // Also include token in URL temporarily (will be removed by frontend) as fallback
-    // This is a workaround for cross-domain cookie issues
-    // Frontend will extract token, store it, and clean URL
-    const frontendUrl = getSafeFrontendUrl();
-    
-    // For cross-domain scenarios, pass token in URL as temporary measure
-    // Frontend will extract it and make authenticated request
-    // This is less secure but works when cookies don't work across domains
-    const redirectUrl = `${frontendUrl}?oauth_success=true&token=${accessToken}`;
-    
-    logger.info('Redirecting to frontend:', {
-      frontendUrl,
-      hasToken: !!accessToken,
-      tokenLength: accessToken?.length
-    });
-    
-    res.redirect(redirectUrl);
+    // Redirect to clean URL (home page) - no tokens in URL
+    // Frontend will automatically detect cookies and fetch user info
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   } catch (error) {
-    logger.error('=== googleCallback Controller ERROR ===');
     logger.error('Google OAuth callback error:', error.message);
-    logger.error('Error name:', error.name);
-    logger.error('Stack trace:', error.stack);
-    const frontendUrl = getSafeFrontendUrl();
-    res.redirect(`${frontendUrl}?error=auth_failed`);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?error=auth_failed`);
   }
 };
 

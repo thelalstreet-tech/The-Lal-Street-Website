@@ -39,11 +39,9 @@ export const setTokens = (accessToken: string, refreshToken: string) => {
  * if using cookies (backend reads from cookies automatically).
  */
 export const getAccessToken = (): string | null => {
-  // Try localStorage first (for email/password login and OAuth token fallback)
+  // Try localStorage first (for email/password login)
   const token = localStorage.getItem(TOKEN_KEY);
-  if (token) {
-    return token;
-  }
+  if (token) return token;
   
   // If no localStorage token, assume cookies are being used (set by backend)
   // Return null - backend will read from cookies

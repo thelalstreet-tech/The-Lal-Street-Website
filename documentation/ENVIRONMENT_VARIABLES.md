@@ -56,31 +56,11 @@ export const API_BASE_URL = import.meta.env.VITE_API_URL ||
 PORT=5000
 NODE_ENV=production
 
-# Trust Proxy (number of proxy hops, defaults to 1)
-TRUST_PROXY=1
-
 # CORS Configuration (Comma-separated origins)
 ALLOWED_ORIGINS=https://the-lal-street.vercel.app,http://localhost:5173
 
-# Frontend URL (validated against ALLOWED_ORIGINS)
-FRONTEND_URL=https://the-lal-street.vercel.app
-
 # Admin Authentication
 ADMIN_PASSWORD=your-secure-password-here
-
-# JWT Configuration (REQUIRED in production, minimum 32 characters)
-JWT_SECRET=your-jwt-secret-key-minimum-32-characters-long-for-security
-JWT_REFRESH_SECRET=your-refresh-token-secret-minimum-32-characters-long
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# Google OAuth (if using Google login)
-GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-client-secret
-GOOGLE_CALLBACK_URL=https://your-backend.onrender.com/api/auth/google/callback
-
-# MongoDB Connection (REQUIRED)
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/database
 
 # External API Keys (if needed)
 RAPIDAPI_KEY=your-rapidapi-key-here
@@ -92,18 +72,8 @@ RAPIDAPI_KEY=your-rapidapi-key-here
 |----------|----------|---------|-------------|
 | `PORT` | No | `5000` | Server port number (Render auto-assigns) |
 | `NODE_ENV` | Yes | `production` | Environment mode (production/development) |
-| `TRUST_PROXY` | No | `1` | Number of proxy hops to trust (for rate limiting) |
 | `ALLOWED_ORIGINS` | Yes | `http://localhost:5173` | CORS allowed origins (comma-separated) |
-| `FRONTEND_URL` | Recommended | - | Frontend URL (validated against ALLOWED_ORIGINS) |
 | `ADMIN_PASSWORD` | Yes | - | Password for admin authentication |
-| `JWT_SECRET` | Yes (prod) | - | JWT secret key (minimum 32 characters) |
-| `JWT_REFRESH_SECRET` | Yes (prod) | - | JWT refresh secret (minimum 32 characters) |
-| `JWT_EXPIRES_IN` | No | `15m` | Access token expiration time |
-| `JWT_REFRESH_EXPIRES_IN` | No | `7d` | Refresh token expiration time |
-| `GOOGLE_CLIENT_ID` | If OAuth | - | Google OAuth Client ID |
-| `GOOGLE_CLIENT_SECRET` | If OAuth | - | Google OAuth Client Secret |
-| `GOOGLE_CALLBACK_URL` | If OAuth | Auto | OAuth callback URL (auto-constructed if not set) |
-| `MONGODB_URI` | Yes | - | MongoDB connection string |
 | `RAPIDAPI_KEY` | No | - | API key for RapidAPI services (if used) |
 
 **Render Configuration:**

@@ -14,7 +14,8 @@ export function getCareerStageLabel(stage: 'early' | 'mid' | 'late'): string {
 export function generateReportHTML(
   inputs: any,
   results: any,
-  formatCurrency: (amount: number) => string
+  formatCurrency: (amount: number) => string,
+  logoUrl?: string
 ): string {
   const getZoneLabel = (inputs: any): string => {
     // Show city name if available, otherwise fall back to zone/locality
@@ -30,6 +31,19 @@ export function generateReportHTML(
     }
     return 'Not specified';
   };
+
+  const reportTimestamp = new Date().toLocaleString('en-IN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
+
+  // Use provided logo URL or default to absolute path
+  const logoPath = logoUrl || `${window.location.origin}/logo.png`;
 
   return `
 <!DOCTYPE html>
@@ -50,9 +64,19 @@ export function generateReportHTML(
       padding-bottom: 20px;
       margin-bottom: 30px;
     }
+    .header-logo {
+      max-width: 200px;
+      height: auto;
+      margin-bottom: 15px;
+    }
     .header h1 {
       color: #2563eb;
-      margin: 0;
+      margin: 0 0 10px 0;
+    }
+    .header-timestamp {
+      color: #666;
+      font-size: 14px;
+      margin-top: 10px;
     }
     .section {
       margin-bottom: 30px;
@@ -130,12 +154,9 @@ export function generateReportHTML(
 </head>
 <body>
   <div class="header">
+    <img src="${logoPath}" alt="The Lal Street" class="header-logo" />
     <h1>Financial Planning Report</h1>
-    <p>Generated on ${new Date().toLocaleDateString('en-IN', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    })}</p>
+    <p class="header-timestamp">Generated on ${reportTimestamp}</p>
   </div>
 
   <div class="section">
@@ -257,7 +278,7 @@ export function downloadReport(inputs: any, results: any): void {
     }).format(amount);
   };
 
-  const html = generateReportHTML(inputs, results, formatCurrency);
+  const html = generateReportHTML(inputs, results, formatCurrency, `${window.location.origin}/logo.png`);
   
   // Open in new window with print-friendly styling
   const printWindow = window.open('', '_blank');

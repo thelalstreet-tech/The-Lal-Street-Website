@@ -44,6 +44,16 @@ export function Footer() {
                   Financial Planning
                 </a>
               </li>
+              <li>
+                <a href="#ai-stock-analysis" className="text-slate-300 hover:text-blue-400 transition-colors text-sm">
+                  AI Stock Analysis
+                </a>
+              </li>
+              <li>
+                <a href="#blogs" className="text-slate-300 hover:text-blue-400 transition-colors text-sm">
+                  Blogs & Community
+                </a>
+              </li>
             </ul>
           </div>
 

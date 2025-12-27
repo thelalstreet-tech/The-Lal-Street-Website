@@ -49,6 +49,7 @@ export function AdminSuggestedBuckets({ isAdmin = true }: AdminSuggestedBucketsP
       const loaded = await loadSuggestedBuckets(false); // Load all, not just active
       setBuckets(loaded);
     } catch (error) {
+      console.error('Error loading suggested buckets:', error);
       setBuckets([]);
     }
   };
@@ -156,20 +157,25 @@ export function AdminSuggestedBuckets({ isAdmin = true }: AdminSuggestedBucketsP
         await updateSuggestedBucket(editingBucketId, {
           ...bucketData,
           lastCalculationDate: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         });
       } else {
-        // Create new bucket - API will generate id, createdAt, updatedAt
-        const newBucket: Omit<SuggestedBucket, 'id' | 'createdAt' | 'updatedAt'> & { lastCalculationDate?: string } = {
+        // Create new bucket
+        const newBucket: SuggestedBucket = {
           ...bucketData,
+          id: `bucket-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
           lastCalculationDate: new Date().toISOString(),
         };
-        await addSuggestedBucket(newBucket as SuggestedBucket);
+        await addSuggestedBucket(newBucket);
       }
 
       await loadBuckets();
       resetForm();
       setIsDialogOpen(false);
     } catch (error: any) {
+      console.error('Error calculating performance:', error);
       alert(`Error calculating performance: ${error.message}`);
     } finally {
       setIsCalculating(false);
@@ -193,6 +199,7 @@ export function AdminSuggestedBuckets({ isAdmin = true }: AdminSuggestedBucketsP
         await deleteSuggestedBucket(bucketId);
         await loadBuckets();
       } catch (error: any) {
+        console.error('Error deleting bucket:', error);
         alert(`Error deleting bucket: ${error.message}`);
       }
     }
@@ -202,9 +209,11 @@ export function AdminSuggestedBuckets({ isAdmin = true }: AdminSuggestedBucketsP
     try {
       await updateSuggestedBucket(bucket.id, {
         isActive: !bucket.isActive,
+        updatedAt: new Date().toISOString(),
       });
       await loadBuckets();
     } catch (error: any) {
+      console.error('Error updating bucket:', error);
       alert(`Error updating bucket: ${error.message}`);
     }
   };

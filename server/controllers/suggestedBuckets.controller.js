@@ -106,10 +106,9 @@ const handleUpdateBucket = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
     
-    // Don't allow updating ID, createdAt, updatedAt (handled by MongoDB)
+    // Don't allow updating ID, createdAt
     delete updates.id;
     delete updates.createdAt;
-    delete updates.updatedAt;
     
     const updatedBucket = await updateSuggestedBucket(id, updates);
     

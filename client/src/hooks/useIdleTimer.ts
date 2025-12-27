@@ -11,7 +11,7 @@ interface UseIdleTimerOptions {
  * Hook to track idle time and trigger callback after specified duration
  */
 export const useIdleTimer = ({ onIdle, idleTime, enabled = true }: UseIdleTimerOptions) => {
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -24,24 +24,14 @@ export const useIdleTimer = ({ onIdle, idleTime, enabled = true }: UseIdleTimerO
     }
 
     // Get or set start time
-    // Only set new start time if user is not logged in and hasn't dismissed popup
     const getStartTime = (): number => {
-      const dismissed = sessionStorage.getItem('loginPopupDismissed');
       const stored = localStorage.getItem('siteVisitStartTime');
-      
-      // If user dismissed popup in this session, don't reset timer
-      if (dismissed && stored) {
+      if (stored) {
         return parseInt(stored, 10);
       }
-      
-      // If no stored time or user logged out (dismissal cleared), start fresh
-      if (!stored) {
-        const now = Date.now();
-        localStorage.setItem('siteVisitStartTime', now.toString());
-        return now;
-      }
-      
-      return parseInt(stored, 10);
+      const now = Date.now();
+      localStorage.setItem('siteVisitStartTime', now.toString());
+      return now;
     };
 
     startTimeRef.current = getStartTime();

@@ -4,6 +4,8 @@ import { HomePage } from './components/HomePage';
 import { InvestmentPlanPage } from './components/InvestmentPlanPage';
 import { RetirementPlanPage } from './components/RetirementPlanPage';
 import { FinancialPlanningPage } from './components/FinancialPlanningPage';
+import { AIStockAnalysisPage } from './components/AIStockAnalysisPage';
+import { BlogsPage } from './components/BlogsPage';
 import { AdminPage } from './components/AdminPage';
 import { Footer } from './components/Footer';
 import { LoginModal } from './components/LoginModal';
@@ -26,7 +28,7 @@ export interface SelectedFund extends Fund {
   weightage: number;
 }
 
-export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'admin';
+export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'blogs' | 'admin';
 
 // Utility function to distribute 100% weightage as whole numbers
 const distributeWeightage = (count: number): number[] => {
@@ -58,33 +60,17 @@ export default function App() {
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  // 1-minute popup logic - only for new users or users with expired sessions
+  // 2-minute popup logic
   useIdleTimer({
     onIdle: () => {
-      // Only show popup if:
-      // 1. User is not authenticated
-      // 2. Modal is not already showing
-      // 3. Auth is not loading
-      // 4. User hasn't dismissed it for this visit
+      // Only show popup if user is not authenticated and not already showing
       if (!isAuthenticated && !showLoginModal && !authLoading) {
-        const dismissed = sessionStorage.getItem('loginPopupDismissed');
-        if (!dismissed) {
-          setShowLoginModal(true);
-        }
+        setShowLoginModal(true);
       }
     },
-    idleTime: 1 * 60 * 1000, // 1 minute
+    idleTime: 2 * 60 * 1000, // 2 minutes
     enabled: !isAuthenticated && !authLoading, // Only track if not authenticated
   });
-  
-  // Immediately close popup when user becomes authenticated
-  useEffect(() => {
-    if (isAuthenticated && showLoginModal) {
-      setShowLoginModal(false);
-      sessionStorage.removeItem('loginPopupDismissed');
-      localStorage.removeItem('siteVisitStartTime');
-    }
-  }, [isAuthenticated, showLoginModal]);
 
   // Handle login modal dismissal
   const handleDismissLogin = () => {
@@ -93,23 +79,19 @@ export default function App() {
     setShowLoginModal(false);
   };
 
-  // Reset dismissal when user logs in and close popup
+  // Reset dismissal when user logs in
   useEffect(() => {
     if (isAuthenticated) {
       sessionStorage.removeItem('loginPopupDismissed');
       localStorage.removeItem('siteVisitStartTime');
       setShowLoginModal(false);
-      // Force close any open modals
-      if (showLoginModal) {
-        setShowLoginModal(false);
-      }
     }
-  }, [isAuthenticated, showLoginModal]);
+  }, [isAuthenticated]);
 
   // Handle URL hash for direct navigation (including admin access via #admin)
   useEffect(() => {
     const hash = window.location.hash.slice(1);
-    if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'admin'].includes(hash)) {
+    if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'blogs', 'admin'].includes(hash)) {
       setActivePage(hash as PageType);
     }
   }, []);
@@ -118,7 +100,7 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1);
-      if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'admin'].includes(hash)) {
+      if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'blogs', 'admin'].includes(hash)) {
         setActivePage(hash as PageType);
       }
     };
@@ -278,6 +260,10 @@ export default function App() {
         );
       case 'financial-planning':
         return <FinancialPlanningPage />;
+      case 'ai-stock-analysis':
+        return <AIStockAnalysisPage onNavigate={handleNavigate} />;
+      case 'blogs':
+        return <BlogsPage onNavigate={handleNavigate} />;
       case 'admin':
         return <AdminPage onNavigate={handleNavigate} />;
       default:
@@ -292,7 +278,7 @@ export default function App() {
 
       <SnowFall
         snowflakeCount={80}
-        style={{ position: 'fixed', width: '100%', height: '100%', zIndex: 1, pointerEvents: 'none' }}
+        style={{ position: 'fixed', width: '100%', height: '100%', zIndex: 1 }}
       />
 
       <Navigation 
