@@ -1,67 +1,14 @@
 // server/services/suggestedBuckets.service.js
-const fs = require('fs').promises;
-const path = require('path');
+const mongoose = require('mongoose');
+const SuggestedBucket = require('../models/SuggestedBucket');
 const logger = require('../utils/logger');
 
-// File path for storing suggested buckets
-// On Render with rootDir='server', process.cwd() is the server directory
-// So data file will be stored in server/data/suggestedBuckets.json
-const BUCKETS_FILE_PATH = path.join(process.cwd(), 'data', 'suggestedBuckets.json');
-
-// Ensure data directory exists
-const DATA_DIR = path.dirname(BUCKETS_FILE_PATH);
-const ensureDataDir = async () => {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-  } catch (error) {
-    // Directory might already exist, that's fine
-    if (error.code !== 'EEXIST') {
-      logger.error('Error creating data directory:', error.message);
-    }
-  }
-};
-
 /**
- * Load suggested buckets from file
- * @returns {Promise<Array>} Array of suggested buckets
+ * Check if database is connected
+ * @returns {boolean}
  */
-const loadSuggestedBuckets = async () => {
-  try {
-    await ensureDataDir();
-    const data = await fs.readFile(BUCKETS_FILE_PATH, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      // File doesn't exist, return empty array
-      logger.info('Suggested buckets file not found, returning empty array');
-      return [];
-    }
-    logger.error('Error loading suggested buckets:', error.message);
-    logger.error('Error stack:', error.stack);
-    return [];
-  }
-};
-
-/**
- * Save suggested buckets to file
- * @param {Array} buckets - Array of suggested buckets to save
- * @returns {Promise<void>}
- */
-const saveSuggestedBuckets = async (buckets) => {
-  try {
-    await ensureDataDir();
-    await fs.writeFile(
-      BUCKETS_FILE_PATH,
-      JSON.stringify(buckets, null, 2),
-      'utf8'
-    );
-    logger.info(`Saved ${buckets.length} suggested buckets to file`);
-  } catch (error) {
-    logger.error('Error saving suggested buckets:', error.message);
-    logger.error('Error stack:', error.stack);
-    logger.error('Attempted path:', BUCKETS_FILE_PATH);
-    throw new Error(`Failed to save suggested buckets: ${error.message}`);
-  }
+const isDatabaseConnected = () => {
+  return mongoose.connection.readyState === 1; // 1 = connected
 };
 
 /**
@@ -70,21 +17,65 @@ const saveSuggestedBuckets = async (buckets) => {
  * @returns {Promise<Array>}
  */
 const getAllSuggestedBuckets = async (activeOnly = false) => {
-  const buckets = await loadSuggestedBuckets();
-  if (activeOnly) {
-    return buckets.filter(b => b.isActive === true);
+  try {
+    if (!isDatabaseConnected()) {
+      logger.warn('Database not connected, returning empty array for suggested buckets');
+      return [];
+    }
+
+    const query = activeOnly ? { isActive: true } : {};
+    const buckets = await SuggestedBucket.find(query)
+      .sort({ createdAt: -1 })
+      .lean(); // Use lean() for better performance
+    
+    // Convert MongoDB _id to id for backward compatibility
+    return buckets.map(bucket => ({
+      ...bucket,
+      id: bucket._id.toString(),
+      _id: undefined
+    }));
+  } catch (error) {
+    logger.error('Error getting all suggested buckets:', error.message);
+    logger.error('Error stack:', error.stack);
+    return [];
   }
-  return buckets;
 };
 
 /**
  * Get a single suggested bucket by ID
- * @param {string} bucketId
+ * @param {string} bucketId - MongoDB ObjectId or string ID
  * @returns {Promise<Object|null>}
  */
 const getSuggestedBucketById = async (bucketId) => {
-  const buckets = await loadSuggestedBuckets();
-  return buckets.find(b => b.id === bucketId) || null;
+  try {
+    if (!isDatabaseConnected()) {
+      logger.warn('Database not connected, cannot fetch suggested bucket');
+      return null;
+    }
+
+    // Check if bucketId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(bucketId)) {
+      logger.warn(`Invalid bucket ID format: ${bucketId}`);
+      return null;
+    }
+
+    const bucket = await SuggestedBucket.findById(bucketId).lean();
+    
+    if (!bucket) {
+      return null;
+    }
+
+    // Convert MongoDB _id to id for backward compatibility
+    return {
+      ...bucket,
+      id: bucket._id.toString(),
+      _id: undefined
+    };
+  } catch (error) {
+    logger.error('Error getting suggested bucket by ID:', error.message);
+    logger.error('Error stack:', error.stack);
+    return null;
+  }
 };
 
 /**
@@ -93,67 +84,121 @@ const getSuggestedBucketById = async (bucketId) => {
  * @returns {Promise<Object>} Created bucket with generated fields
  */
 const addSuggestedBucket = async (bucketData) => {
-  const buckets = await loadSuggestedBuckets();
-  
-  const newBucket = {
-    ...bucketData,
-    id: bucketData.id || `bucket-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    createdAt: bucketData.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  
-  buckets.push(newBucket);
-  await saveSuggestedBuckets(buckets);
-  
-  logger.info(`Added new suggested bucket: ${newBucket.id}`);
-  return newBucket;
+  try {
+    if (!isDatabaseConnected()) {
+      throw new Error('Database not connected. Cannot create suggested bucket.');
+    }
+
+    // Remove id if present (MongoDB will generate _id)
+    const { id, ...cleanBucketData } = bucketData;
+
+    const newBucket = new SuggestedBucket(cleanBucketData);
+    await newBucket.save();
+
+    logger.info(`Added new suggested bucket: ${newBucket._id}`);
+
+    // Convert MongoDB _id to id for backward compatibility
+    return {
+      ...newBucket.toObject(),
+      id: newBucket._id.toString(),
+      _id: undefined
+    };
+  } catch (error) {
+    logger.error('Error adding suggested bucket:', error.message);
+    logger.error('Error stack:', error.stack);
+    throw error;
+  }
 };
 
 /**
  * Update an existing suggested bucket
- * @param {string} bucketId
+ * @param {string} bucketId - MongoDB ObjectId or string ID
  * @param {Object} updates - Partial bucket data to update
  * @returns {Promise<Object|null>} Updated bucket or null if not found
  */
 const updateSuggestedBucket = async (bucketId, updates) => {
-  const buckets = await loadSuggestedBuckets();
-  const index = buckets.findIndex(b => b.id === bucketId);
-  
-  if (index === -1) {
-    return null;
+  try {
+    if (!isDatabaseConnected()) {
+      throw new Error('Database not connected. Cannot update suggested bucket.');
+    }
+
+    // Check if bucketId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(bucketId)) {
+      logger.warn(`Invalid bucket ID format: ${bucketId}`);
+      return null;
+    }
+
+    // Don't allow updating _id, id, createdAt
+    delete updates._id;
+    delete updates.id;
+    delete updates.createdAt;
+
+    const updatedBucket = await SuggestedBucket.findByIdAndUpdate(
+      bucketId,
+      { ...updates, updatedAt: new Date() },
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!updatedBucket) {
+      return null;
+    }
+
+    logger.info(`Updated suggested bucket: ${bucketId}`);
+
+    // Convert MongoDB _id to id for backward compatibility
+    return {
+      ...updatedBucket,
+      id: updatedBucket._id.toString(),
+      _id: undefined
+    };
+  } catch (error) {
+    logger.error('Error updating suggested bucket:', error.message);
+    logger.error('Error stack:', error.stack);
+    throw error;
   }
-  
-  buckets[index] = {
-    ...buckets[index],
-    ...updates,
-    id: bucketId, // Ensure ID doesn't change
-    updatedAt: new Date().toISOString(),
-  };
-  
-  await saveSuggestedBuckets(buckets);
-  
-  logger.info(`Updated suggested bucket: ${bucketId}`);
-  return buckets[index];
 };
 
 /**
  * Delete a suggested bucket
- * @param {string} bucketId
+ * @param {string} bucketId - MongoDB ObjectId or string ID
  * @returns {Promise<boolean>} True if deleted, false if not found
  */
 const deleteSuggestedBucket = async (bucketId) => {
-  const buckets = await loadSuggestedBuckets();
-  const initialLength = buckets.length;
-  const filtered = buckets.filter(b => b.id !== bucketId);
-  
-  if (filtered.length === initialLength) {
-    return false; // Not found
+  try {
+    if (!isDatabaseConnected()) {
+      throw new Error('Database not connected. Cannot delete suggested bucket.');
+    }
+
+    // Check if bucketId is a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(bucketId)) {
+      logger.warn(`Invalid bucket ID format: ${bucketId}`);
+      return false;
+    }
+
+    const result = await SuggestedBucket.findByIdAndDelete(bucketId);
+
+    if (!result) {
+      return false;
+    }
+
+    logger.info(`Deleted suggested bucket: ${bucketId}`);
+    return true;
+  } catch (error) {
+    logger.error('Error deleting suggested bucket:', error.message);
+    logger.error('Error stack:', error.stack);
+    throw error;
   }
-  
-  await saveSuggestedBuckets(filtered);
-  
-  logger.info(`Deleted suggested bucket: ${bucketId}`);
-  return true;
+};
+
+// Legacy functions for backward compatibility (no longer used but kept for API compatibility)
+const loadSuggestedBuckets = async () => {
+  logger.warn('loadSuggestedBuckets() is deprecated, use getAllSuggestedBuckets() instead');
+  return getAllSuggestedBuckets(false);
+};
+
+const saveSuggestedBuckets = async (buckets) => {
+  logger.warn('saveSuggestedBuckets() is deprecated and no longer supported. Use individual create/update/delete functions instead.');
+  throw new Error('saveSuggestedBuckets() is deprecated. Use addSuggestedBucket(), updateSuggestedBucket(), or deleteSuggestedBucket() instead.');
 };
 
 module.exports = {
@@ -162,7 +207,6 @@ module.exports = {
   addSuggestedBucket,
   updateSuggestedBucket,
   deleteSuggestedBucket,
-  loadSuggestedBuckets,
-  saveSuggestedBuckets,
+  loadSuggestedBuckets, // Deprecated but kept for backward compatibility
+  saveSuggestedBuckets, // Deprecated but kept for backward compatibility
 };
-
