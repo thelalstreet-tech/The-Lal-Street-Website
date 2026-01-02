@@ -49,14 +49,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     const initializeAuth = async () => {
       try {
-        // Small delay to ensure cookies are available after OAuth redirect
-        // This is especially important for OAuth callbacks
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Longer delay for cold starts on Render free tier (can take 30s+)
+        // Also ensures cookies are available after OAuth redirect
+        await new Promise(resolve => setTimeout(resolve, 500));
 
         // First, try to get user from server (works for both cookies and localStorage tokens)
         // This is the primary method - server reads from cookies or Authorization header
+        // getCurrentUser now has built-in retry logic for cold starts
         try {
-          const currentUser = await getCurrentUser();
+          const currentUser = await getCurrentUser(0);
           if (currentUser && isMounted) {
             logger.log('User found from server:', currentUser.email);
             setUser(currentUser);
@@ -73,29 +74,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(storedUser);
           
           // Verify with server and refresh token if needed
+          // Use retry count to avoid clearing tokens on cold start
           try {
-            const currentUser = await getCurrentUser();
+            const currentUser = await getCurrentUser(1);
             if (currentUser) {
               setUser(currentUser);
             } else {
-              // Token invalid, try to refresh
+              // Token might be invalid, or server might be cold starting
+              // Try to refresh token (has retry logic built-in)
               const newToken = await refreshAccessToken();
               if (newToken) {
-                const refreshedUser = await getCurrentUser();
+                const refreshedUser = await getCurrentUser(2);
                 if (refreshedUser) {
                   setUser(refreshedUser);
                 } else {
+                  // Only clear after multiple failed attempts (not cold start)
                   clearTokens();
                   setUser(null);
                 }
               } else {
-                clearTokens();
+                // Refresh failed - might be cold start, don't clear immediately
+                // Will be cleared on next attempt if still failing
                 setUser(null);
               }
             }
           } catch (error) {
             logger.log('Error verifying user:', error);
-            clearTokens();
+            // Don't clear tokens on error - might be network/cold start issue
             setUser(null);
           }
         } else {
@@ -167,7 +172,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const currentUser = await getCurrentUser();
+    const currentUser = await getCurrentUser(0);
     if (currentUser) {
       setUser(currentUser);
     }

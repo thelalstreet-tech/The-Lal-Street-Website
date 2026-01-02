@@ -1,7 +1,7 @@
 // API Configuration
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 
   (import.meta.env.MODE === 'production' 
-    ? 'https://the-lal-street-1.onrender.com' // Render backend URL
+    ? 'https://the-lal-street-website.onrender.com' // Render backend URL
     : 'http://localhost:5000');
 
 export const API_ENDPOINTS = {

@@ -139,6 +139,7 @@ export const loginWithGoogle = () => {
  * Refresh access token
  * Backend can read refreshToken from httpOnly cookie, but we also support
  * sending it in body for localStorage-based auth
+ * Includes retry logic for cold starts
  */
 export const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
@@ -156,12 +157,18 @@ export const refreshAccessToken = async (): Promise<string | null> => {
       body.refreshToken = refreshToken;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-      method: 'POST',
-      headers,
-      credentials: 'include', // Important: sends cookies
-      body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
-    });
+    // Use retry logic for cold starts
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/api/auth/refresh`,
+      {
+        method: 'POST',
+        headers,
+        credentials: 'include', // Important: sends cookies
+        body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+      },
+      3, // max retries
+      2000 // initial delay 2s
+    );
 
     const data = await response.json();
     
@@ -182,10 +189,53 @@ export const refreshAccessToken = async (): Promise<string | null> => {
 };
 
 /**
+ * Retry fetch with exponential backoff (for cold starts on Render)
+ */
+const fetchWithRetry = async (
+  url: string,
+  options: RequestInit,
+  maxRetries = 3,
+  initialDelay = 1000
+): Promise<Response> => {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // If successful or not a network/server error, return immediately
+      if (response.ok || (response.status !== 0 && response.status < 500)) {
+        return response;
+      }
+      
+      // If it's the last attempt, return the response anyway
+      if (attempt === maxRetries - 1) {
+        return response;
+      }
+      
+      // Wait with exponential backoff before retrying
+      const delay = initialDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    } catch (error) {
+      // If it's the last attempt, throw the error
+      if (attempt === maxRetries - 1) {
+        throw error;
+      }
+      
+      // Wait with exponential backoff before retrying
+      const delay = initialDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  // Fallback (shouldn't reach here)
+  return fetch(url, options);
+};
+
+/**
  * Get current user from server
  * Backend reads tokens from httpOnly cookies automatically
+ * Includes retry logic for Render cold starts
  */
-export const getCurrentUser = async (): Promise<User | null> => {
+export const getCurrentUser = async (retryCount = 0): Promise<User | null> => {
   try {
     // Try with Authorization header first (for localStorage tokens)
     const token = getAccessToken();
@@ -196,22 +246,34 @@ export const getCurrentUser = async (): Promise<User | null> => {
     }
     // If no token, backend will read from httpOnly cookies
 
-    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-      headers,
-      credentials: 'include', // Important: sends cookies with request
-    });
+    // Use retry logic for cold starts (especially on Render free tier)
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/api/auth/me`,
+      {
+        headers,
+        credentials: 'include', // Important: sends cookies with request
+      },
+      3, // max retries
+      2000 // initial delay 2s (cold starts can take 30s+)
+    );
 
     if (response.status === 401) {
-      // Token expired, try to refresh
+      // Don't immediately clear tokens - might be cold start
+      // Try to refresh token first
       const newToken = await refreshAccessToken();
       if (newToken) {
         // Retry with new token
-        const retryResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
-          headers: {
-            'Authorization': `Bearer ${newToken}`,
+        const retryResponse = await fetchWithRetry(
+          `${API_BASE_URL}/api/auth/me`,
+          {
+            headers: {
+              'Authorization': `Bearer ${newToken}`,
+            },
+            credentials: 'include',
           },
-          credentials: 'include',
-        });
+          2, // fewer retries for refresh
+          1000
+        );
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
           if (retryData.success && retryData.data?.user) {
@@ -221,8 +283,12 @@ export const getCurrentUser = async (): Promise<User | null> => {
           }
         }
       }
-      // Refresh failed, clear tokens
-      clearTokens();
+      
+      // Only clear tokens if we've exhausted retries and refresh failed
+      // Don't clear on first 401 - might be cold start
+      if (retryCount > 1) {
+        clearTokens();
+      }
       return null;
     }
 
@@ -237,6 +303,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
     return null;
   } catch (error) {
     console.error('Error fetching current user:', error);
+    // Don't clear tokens on network errors - might be cold start
     return null;
   }
 };
