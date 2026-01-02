@@ -48,29 +48,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     let isMounted = true;
     
     const initializeAuth = async () => {
+      const DEBUG = true;
+      const logPrefix = '[AuthContext:initializeAuth]';
+      
       try {
+        if (DEBUG) console.log(`${logPrefix} Starting auth initialization...`);
+        
         // Longer delay for cold starts on Render free tier (can take 30s+)
         // Also ensures cookies are available after OAuth redirect
         await new Promise(resolve => setTimeout(resolve, 500));
+        
+        if (DEBUG) {
+          // Check cookies (can't read httpOnly, but we can check if cookie header would be sent)
+          console.log(`${logPrefix} Checking authentication state...`);
+          console.log(`${logPrefix} localStorage token:`, localStorage.getItem('accessToken') ? 'exists' : 'none');
+          console.log(`${logPrefix} localStorage user:`, localStorage.getItem('user') ? 'exists' : 'none');
+        }
 
         // First, try to get user from server (works for both cookies and localStorage tokens)
         // This is the primary method - server reads from cookies or Authorization header
         // getCurrentUser now has built-in retry logic for cold starts
         try {
+          if (DEBUG) console.log(`${logPrefix} Attempting getCurrentUser(0)...`);
           const currentUser = await getCurrentUser(0);
           if (currentUser && isMounted) {
-            logger.log('User found from server:', currentUser.email);
+            logger.log(`${logPrefix} ✅ User found from server:`, currentUser.email);
             setUser(currentUser);
             setIsLoading(false);
             return; // Success, exit early
+          } else {
+            if (DEBUG) console.log(`${logPrefix} No user from server (currentUser: ${currentUser})`);
           }
         } catch (error) {
-          logger.log('No user from server, checking localStorage...', error);
+          logger.log(`${logPrefix} Error getting user from server:`, error);
         }
 
         // Fallback: Check if user is stored locally (for email/password login with localStorage)
         const storedUser = getStoredUser();
+        if (DEBUG) {
+          console.log(`${logPrefix} Stored user check:`, {
+            hasStoredUser: !!storedUser,
+            isAuthenticated: isAuthenticated(),
+            storedUserEmail: storedUser?.email
+          });
+        }
+        
         if (storedUser && isAuthenticated()) {
+          if (DEBUG) console.log(`${logPrefix} Found stored user, verifying with server...`);
           setUser(storedUser);
           
           // Verify with server and refresh token if needed
@@ -78,33 +102,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             const currentUser = await getCurrentUser(1);
             if (currentUser) {
+              if (DEBUG) console.log(`${logPrefix} ✅ Verified stored user with server:`, currentUser.email);
               setUser(currentUser);
             } else {
+              if (DEBUG) console.log(`${logPrefix} Stored user verification failed, trying token refresh...`);
               // Token might be invalid, or server might be cold starting
               // Try to refresh token (has retry logic built-in)
               const newToken = await refreshAccessToken();
               if (newToken) {
+                if (DEBUG) console.log(`${logPrefix} Token refreshed, retrying getCurrentUser...`);
                 const refreshedUser = await getCurrentUser(2);
                 if (refreshedUser) {
+                  if (DEBUG) console.log(`${logPrefix} ✅ Success after refresh:`, refreshedUser.email);
                   setUser(refreshedUser);
                 } else {
+                  if (DEBUG) console.log(`${logPrefix} ❌ Failed after refresh, clearing tokens`);
                   // Only clear after multiple failed attempts (not cold start)
                   clearTokens();
                   setUser(null);
                 }
               } else {
+                if (DEBUG) console.log(`${logPrefix} Token refresh failed, keeping stored user for now`);
                 // Refresh failed - might be cold start, don't clear immediately
                 // Will be cleared on next attempt if still failing
                 setUser(null);
               }
             }
           } catch (error) {
-            logger.log('Error verifying user:', error);
+            logger.log(`${logPrefix} Error verifying user:`, error);
             // Don't clear tokens on error - might be network/cold start issue
             setUser(null);
           }
         } else {
           // No stored user and no server user - not logged in
+          if (DEBUG) console.log(`${logPrefix} No stored user, user is not authenticated`);
           if (isMounted) {
             setUser(null);
           }

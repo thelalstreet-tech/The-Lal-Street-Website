@@ -321,8 +321,12 @@ const refreshToken = async (req, res) => {
  * Get current user info
  */
 const getMe = async (req, res) => {
+  const DEBUG = process.env.NODE_ENV !== 'production';
+  const logPrefix = '[getMe]';
+  
   try {
     if (!isDatabaseConnected()) {
+      logger.warn(`${logPrefix} Database not connected`);
       return res.status(503).json({
         success: false,
         message: 'Database is not available. Please configure MONGODB_URI in your environment variables.'
@@ -330,6 +334,13 @@ const getMe = async (req, res) => {
     }
 
     const user = req.user; // Set by authenticateToken middleware
+
+    if (DEBUG) {
+      logger.debug(`${logPrefix} Returning user data:`, {
+        userId: user._id,
+        email: user.email
+      });
+    }
 
     res.json({
       success: true,
@@ -345,7 +356,10 @@ const getMe = async (req, res) => {
       }
     });
   } catch (error) {
-    logger.error('Get me error:', error.message);
+    logger.error(`${logPrefix} Error:`, error.message);
+    if (DEBUG) {
+      logger.error(`${logPrefix} Error stack:`, error.stack);
+    }
     res.status(500).json({
       success: false,
       message: 'Error fetching user info'
