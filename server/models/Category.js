@@ -5,7 +5,7 @@ const categorySchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Category name is required'],
-    unique: true,
+    unique: true, // Creates index automatically
     trim: true,
     lowercase: true,
     maxlength: [50, 'Category name cannot exceed 50 characters'],
@@ -17,7 +17,7 @@ const categorySchema = new mongoose.Schema({
   },
   slug: {
     type: String,
-    unique: true,
+    unique: true, // Creates index automatically
     sparse: true, // Allows multiple null values
     trim: true,
     lowercase: true,
@@ -49,9 +49,8 @@ categorySchema.pre('save', function(next) {
   next();
 });
 
-// Index for faster lookups
-categorySchema.index({ name: 1 });
-categorySchema.index({ slug: 1 }, { sparse: true }); // Sparse index allows multiple nulls
+// Note: name and slug indexes are created automatically by unique: true
+// No need for manual indexes
 
 const Category = mongoose.model('Category', categorySchema);
 

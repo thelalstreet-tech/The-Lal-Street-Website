@@ -5,7 +5,7 @@ const tagSchema = new mongoose.Schema({
   name: {
     type: String,
     required: [true, 'Tag name is required'],
-    unique: true,
+    unique: true, // Creates index automatically
     trim: true,
     lowercase: true,
     maxlength: [30, 'Tag name cannot exceed 30 characters'],
@@ -27,8 +27,8 @@ tagSchema.pre('save', function(next) {
   next();
 });
 
-// Index for faster lookups
-tagSchema.index({ name: 1 });
+// Note: name index is created automatically by unique: true
+// No need for manual index
 
 const Tag = mongoose.model('Tag', tagSchema);
 

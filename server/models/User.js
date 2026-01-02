@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true,
+    unique: true, // Creates index automatically
     lowercase: true,
     trim: true,
     match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address']
@@ -22,7 +22,8 @@ const userSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
+    index: true // Creates index for faster queries
   },
   picture: {
     type: String,
@@ -30,7 +31,7 @@ const userSchema = new mongoose.Schema({
   },
   googleId: {
     type: String,
-    unique: true,
+    unique: true, // Creates index automatically
     sparse: true, // Allows multiple null values
     default: null
   },
@@ -59,9 +60,8 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Index for faster queries
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
+// Note: email and googleId indexes are created automatically by unique: true
+// Only add manual indexes for non-unique fields that need faster queries
 
 // Hash password before saving (only for email/password users)
 userSchema.pre('save', async function(next) {

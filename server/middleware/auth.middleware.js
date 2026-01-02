@@ -30,25 +30,31 @@ const authenticateToken = async (req, res, next) => {
       tokenSource = 'Authorization header';
     }
 
-    if (DEBUG) {
-      logger.debug(`${logPrefix} Token check:`, {
-        hasAuthHeader: !!authHeader,
-        hasCookies: !!req.cookies,
-        cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
-        tokenSource,
-        hasToken: !!token,
-        tokenLength: token ? token.length : 0
-      });
-    }
+    // Always log cookie information (even in production) for debugging
+    logger.info(`${logPrefix} Request details:`, {
+      method: req.method,
+      path: req.path,
+      origin: req.headers.origin,
+      hasAuthHeader: !!authHeader,
+      hasCookies: !!req.cookies,
+      cookieKeys: req.cookies ? Object.keys(req.cookies) : [],
+      cookieHeader: req.headers.cookie ? 'present' : 'missing',
+      tokenSource,
+      hasToken: !!token,
+      tokenLength: token ? token.length : 0,
+      // Log raw cookie header (first 100 chars for security)
+      rawCookieHeader: req.headers.cookie ? req.headers.cookie.substring(0, 100) : 'none'
+    });
 
     if (!token) {
-      if (DEBUG) {
-        logger.debug(`${logPrefix} No token found. Headers:`, {
-          authorization: authHeader ? 'present' : 'missing',
-          cookies: req.cookies ? Object.keys(req.cookies) : 'none',
-          cookieParser: typeof req.cookies
-        });
-      }
+      logger.warn(`${logPrefix} No token found. Details:`, {
+        authorization: authHeader ? 'present' : 'missing',
+        cookies: req.cookies ? Object.keys(req.cookies) : 'none',
+        cookieHeader: req.headers.cookie ? 'present' : 'missing',
+        cookieParser: typeof req.cookies,
+        // Show what cookie-parser received
+        parsedCookies: req.cookies
+      });
       return res.status(401).json({
         success: false,
         message: 'Authentication required. Please login.'

@@ -60,19 +60,27 @@ const register = async (req, res) => {
     const { accessToken, refreshToken } = generateTokens(user);
 
     // Set tokens in httpOnly cookies (secure, not accessible via JavaScript)
+    // For cross-origin requests (frontend on different domain), use sameSite: 'none' with secure: true
+    const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction, // Must be true for sameSite: 'none'
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin, 'lax' for same-origin
       maxAge: 15 * 60 * 1000, // 15 minutes (matches access token expiry)
     };
 
     const refreshCookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     };
+    
+    logger.info('Setting cookies with options:', {
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      httpOnly: cookieOptions.httpOnly
+    });
 
     res.cookie('accessToken', accessToken, cookieOptions);
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
@@ -168,19 +176,27 @@ const login = async (req, res) => {
     const { accessToken, refreshToken } = generateTokens(user);
 
     // Set tokens in httpOnly cookies (secure, not accessible via JavaScript)
+    // For cross-origin requests (frontend on different domain), use sameSite: 'none' with secure: true
+    const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction, // Must be true for sameSite: 'none'
+      sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin, 'lax' for same-origin
       maxAge: 15 * 60 * 1000, // 15 minutes (matches access token expiry)
     };
 
     const refreshCookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     };
+    
+    logger.info('Setting cookies with options:', {
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      httpOnly: cookieOptions.httpOnly
+    });
 
     res.cookie('accessToken', accessToken, cookieOptions);
     res.cookie('refreshToken', refreshToken, refreshCookieOptions);
