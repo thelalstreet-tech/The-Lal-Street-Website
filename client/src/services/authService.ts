@@ -236,9 +236,6 @@ const fetchWithRetry = async (
  * Includes retry logic for Render cold starts
  */
 export const getCurrentUser = async (retryCount = 0): Promise<User | null> => {
-  const DEBUG = true; // Enable detailed logging
-  const logPrefix = `[getCurrentUser:${retryCount}]`;
-  
   try {
     // IMPORTANT: Don't send Authorization header if we're using cookies (Google OAuth)
     // The backend middleware checks cookies first, but if we send an expired token
@@ -246,36 +243,13 @@ export const getCurrentUser = async (retryCount = 0): Promise<User | null> => {
     const token = getAccessToken();
     const headers: HeadersInit = {};
     
-    // Only send Authorization header if:
-    // 1. We have a token in localStorage (email/password login)
-    // 2. AND we don't have cookies (cookies take precedence for Google OAuth)
+    // Only send Authorization header if we have a token in localStorage (email/password login)
     // For Google OAuth, cookies are set by backend, so we rely on those
     if (token) {
-      // Check if we're likely using cookies (Google OAuth) by checking if token is recent
-      // If token exists but we're getting 401s, it might be expired - don't send it
-      // Let cookies handle it instead
-      if (DEBUG) {
-        console.log(`${logPrefix} Found localStorage token (length: ${token.length})`);
-        console.log(`${logPrefix} Will send Authorization header, but cookies will take precedence on backend`);
-      }
       headers['Authorization'] = `Bearer ${token}`;
-    } else {
-      if (DEBUG) console.log(`${logPrefix} No localStorage token, relying on httpOnly cookies only`);
-    }
-    
-    // Check if cookies are available (can't read httpOnly cookies, but we can check if they exist)
-    if (DEBUG) {
-      console.log(`${logPrefix} Making request to: ${API_BASE_URL}/api/auth/me`);
-      console.log(`${logPrefix} Request config:`, {
-        hasAuthHeader: !!headers['Authorization'],
-        credentials: 'include',
-        method: 'GET',
-        url: `${API_BASE_URL}/api/auth/me`
-      });
     }
 
     // Use retry logic for cold starts (especially on Render free tier)
-    const startTime = Date.now();
     const response = await fetchWithRetry(
       `${API_BASE_URL}/api/auth/me`,
       {
@@ -285,24 +259,12 @@ export const getCurrentUser = async (retryCount = 0): Promise<User | null> => {
       3, // max retries
       2000 // initial delay 2s (cold starts can take 30s+)
     );
-    const duration = Date.now() - startTime;
-
-    if (DEBUG) {
-      console.log(`${logPrefix} Response received:`, {
-        status: response.status,
-        statusText: response.statusText,
-        duration: `${duration}ms`,
-        headers: Object.fromEntries(response.headers.entries())
-      });
-    }
 
     if (response.status === 401) {
-      if (DEBUG) console.log(`${logPrefix} Got 401, attempting token refresh...`);
       // Don't immediately clear tokens - might be cold start
       // Try to refresh token first
       const newToken = await refreshAccessToken();
       if (newToken) {
-        if (DEBUG) console.log(`${logPrefix} Token refreshed, retrying auth/me...`);
         // Retry with new token
         const retryResponse = await fetchWithRetry(
           `${API_BASE_URL}/api/auth/me`,
@@ -315,86 +277,35 @@ export const getCurrentUser = async (retryCount = 0): Promise<User | null> => {
           2, // fewer retries for refresh
           1000
         );
-        if (DEBUG) {
-          console.log(`${logPrefix} Retry response:`, {
-            status: retryResponse.status,
-            ok: retryResponse.ok
-          });
-        }
         if (retryResponse.ok) {
           const retryData = await retryResponse.json();
           if (retryData.success && retryData.data?.user) {
-            if (DEBUG) console.log(`${logPrefix} Success after refresh:`, retryData.data.user.email);
             // Store user in localStorage for consistency
             setUser(retryData.data.user);
             return retryData.data.user;
           }
-        } else {
-          // Try to get error details
-          try {
-            const errorData = await retryResponse.json();
-            if (DEBUG) console.error(`${logPrefix} Retry failed:`, errorData);
-          } catch (e) {
-            if (DEBUG) console.error(`${logPrefix} Retry failed with status:`, retryResponse.status);
-          }
         }
-      } else {
-        if (DEBUG) console.log(`${logPrefix} Token refresh failed or no refresh token available`);
       }
       
       // Only clear tokens if we've exhausted retries and refresh failed
       // Don't clear on first 401 - might be cold start
       if (retryCount > 1) {
-        if (DEBUG) console.log(`${logPrefix} Clearing tokens after multiple failures`);
         clearTokens();
-      } else {
-        if (DEBUG) console.log(`${logPrefix} Not clearing tokens yet (retryCount: ${retryCount})`);
       }
       return null;
     }
 
-    if (!response.ok) {
-      if (DEBUG) {
-        console.error(`${logPrefix} Response not OK:`, {
-          status: response.status,
-          statusText: response.statusText
-        });
-        try {
-          const errorData = await response.clone().json();
-          console.error(`${logPrefix} Error data:`, errorData);
-        } catch (e) {
-          console.error(`${logPrefix} Could not parse error response`);
-        }
-      }
-      return null;
-    }
+    if (!response.ok) return null;
 
     const data = await response.json();
-    if (DEBUG) {
-      console.log(`${logPrefix} Response data:`, {
-        success: data.success,
-        hasUser: !!data.data?.user,
-        userEmail: data.data?.user?.email
-      });
-    }
-    
     if (data.success && data.data?.user) {
-      if (DEBUG) console.log(`${logPrefix} ✅ Success! User authenticated:`, data.data.user.email);
       setUser(data.data.user);
       return data.data.user;
-    } else {
-      if (DEBUG) console.warn(`${logPrefix} Response success but no user data:`, data);
     }
 
     return null;
   } catch (error) {
-    console.error(`${logPrefix} ❌ Error fetching current user:`, error);
-    if (DEBUG) {
-      console.error(`${logPrefix} Error details:`, {
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined
-      });
-    }
+    console.error('Error fetching current user:', error);
     // Don't clear tokens on network errors - might be cold start
     return null;
   }
