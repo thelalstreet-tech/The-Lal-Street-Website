@@ -124,6 +124,10 @@ app.use('/api/suggested-buckets', suggestedBucketsRoutes);
 const authRoutes = require('./routes/auth.routes.js');
 app.use('/api/auth', authRoutes);
 
+// Blogs routes
+const blogsRoutes = require('./routes/blogs.routes.js');
+app.use('/api/blogs', blogsRoutes);
+
 // Enhanced health check route with server statistics
 app.get('/api/health', (req, res) => {
   const uptime = Math.floor((Date.now() - startTime) / 1000);

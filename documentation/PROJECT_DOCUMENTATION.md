@@ -147,15 +147,43 @@ External API Call → Data Transformation → Response → Frontend Display
 - Individual fund vs. portfolio comparison
 - Growth trend visualization
 
+### 📝 Content Management
+
+#### Blogs & Community
+- **Blog Management System**:
+  - Create, edit, and delete blog posts
+  - Rich HTML content support
+  - Image upload via Cloudinary
+  - Category and tag organization
+  - Exclusive content flagging
+  - Publish/draft status control
+- **Public Blog Page**:
+  - Search functionality
+  - Filter by category and tags
+  - Sort by latest or most viewed
+  - Most popular blogs sidebar
+  - Trending tags display
+  - Full blog reading experience
+- **Automatic Features**:
+  - View count tracking
+  - Category and tag auto-creation
+  - SEO-friendly URLs
+  - Responsive design
+
 ### 🔐 Admin Features
 
 #### Admin Panel
 - Secure authentication system
-- Suggested buckets management:
+- **Suggested buckets management**:
   - Create, edit, delete buckets
   - Configure fund allocations
   - Set risk levels and categories
   - Enable/disable buckets
+- **Blogs management**:
+  - Full CRUD operations
+  - Image upload and management
+  - Category and tag management
+  - Content publishing control
 - Performance data management
 - System health monitoring
 
@@ -391,6 +419,11 @@ See [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) for detailed configur
 | `ALLOWED_ORIGINS` | Yes | - | CORS allowed origins (comma-separated) |
 | `ADMIN_PASSWORD` | Yes | - | Admin authentication password |
 | `RAPIDAPI_KEY` | Optional | - | RapidAPI key for fund search |
+| `CLOUDINARY_CLOUD_NAME` | Yes* | - | Cloudinary cloud name (for blogs) |
+| `CLOUDINARY_API_KEY` | Yes* | - | Cloudinary API key (for blogs) |
+| `CLOUDINARY_API_SECRET` | Yes* | - | Cloudinary API secret (for blogs) |
+
+*Required only if using the blogs feature
 
 #### Frontend Variables
 
@@ -431,6 +464,8 @@ ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:5173
 - **Calculator Routes**: `/api/calculator/*`
 - **Fund Routes**: `/api/funds/*`
 - **Suggested Buckets**: `/api/suggested-buckets/*`
+- **Blogs**: `/api/blogs/*`
+- **Auth Routes**: `/api/auth/*`
 - **Health Check**: `/api/health`
 
 ### Development Workflow
@@ -584,6 +619,17 @@ Body: {
 ```
 GET /api/suggested-buckets?activeOnly=true
 GET /api/suggested-buckets/:id
+```
+
+#### Blogs (See [BLOGS_FEATURE_DOCUMENTATION.md](./BLOGS_FEATURE_DOCUMENTATION.md) for details)
+```
+GET /api/blogs?category=trading&tags=volatility&sortBy=createdAt
+GET /api/blogs/:id
+GET /api/blogs/categories/all
+GET /api/blogs/tags/all
+POST /api/blogs (Admin only - multipart/form-data)
+PUT /api/blogs/:id (Admin only - multipart/form-data)
+DELETE /api/blogs/:id (Admin only)
 ```
 
 #### Calculator Endpoints

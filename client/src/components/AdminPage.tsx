@@ -2,7 +2,9 @@ import React from 'react';
 import { Shield, ArrowLeft, LogOut } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { AdminSuggestedBuckets } from './AdminSuggestedBuckets';
+import { AdminBlogs } from './AdminBlogs';
 import { AdminLogin } from './AdminLogin';
 import { useAuth } from '../hooks/useAuth';
 
@@ -76,7 +78,7 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900">Admin Panel</h1>
-                  <p className="text-sm text-gray-600">Manage Suggested Buckets</p>
+                  <p className="text-sm text-gray-600">Manage content and settings</p>
                 </div>
               </div>
             </div>
@@ -105,7 +107,18 @@ export function AdminPage({ onNavigate }: AdminPageProps) {
 
       {/* Admin Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AdminSuggestedBuckets isAdmin={true} />
+        <Tabs defaultValue="buckets" className="w-full">
+          <TabsList className="mb-6">
+            <TabsTrigger value="buckets">Suggested Buckets</TabsTrigger>
+            <TabsTrigger value="blogs">Blogs</TabsTrigger>
+          </TabsList>
+          <TabsContent value="buckets">
+            <AdminSuggestedBuckets isAdmin={true} />
+          </TabsContent>
+          <TabsContent value="blogs">
+            <AdminBlogs />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

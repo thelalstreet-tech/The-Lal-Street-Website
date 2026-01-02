@@ -6,6 +6,7 @@ import { RetirementPlanPage } from './components/RetirementPlanPage';
 import { FinancialPlanningPage } from './components/FinancialPlanningPage';
 import { AIStockAnalysisPage } from './components/AIStockAnalysisPage';
 import { BlogsPage } from './components/BlogsPage';
+import { BlogDetailPage } from './components/BlogDetailPage';
 import { AdminPage } from './components/AdminPage';
 import { Footer } from './components/Footer';
 import { LoginModal } from './components/LoginModal';
@@ -14,8 +15,6 @@ import { useIdleTimer } from './hooks/useIdleTimer';
 import type { Bucket } from './types/bucket';
 import type { SuggestedBucket } from './types/suggestedBucket';
 
-// A little christmas update 
-import SnowFall from 'react-snowfall';
 
 export interface Fund {
   id: string;
@@ -28,7 +27,7 @@ export interface SelectedFund extends Fund {
   weightage: number;
 }
 
-export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'blogs' | 'admin';
+export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'blogs' | 'blog-detail' | 'admin';
 
 // Utility function to distribute 100% weightage as whole numbers
 const distributeWeightage = (count: number): number[] => {
@@ -56,6 +55,7 @@ export default function App() {
   const [retirementFunds, setRetirementFunds] = useState<SelectedFund[]>([]);
   const [activePage, setActivePage] = useState<PageType>('home');
   const [buckets, setBuckets] = useState<Bucket[]>([]);
+  const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null);
   
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -91,8 +91,19 @@ export default function App() {
   // Handle URL hash for direct navigation (including admin access via #admin)
   useEffect(() => {
     const hash = window.location.hash.slice(1);
-    if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'blogs', 'admin'].includes(hash)) {
-      setActivePage(hash as PageType);
+    if (hash) {
+      // Check if it's a blog detail URL (format: blog-detail?id=xxx)
+      if (hash.startsWith('blog-detail')) {
+        const params = new URLSearchParams(hash.split('?')[1]);
+        const blogId = params.get('id');
+        if (blogId) {
+          setSelectedBlogId(blogId);
+          setActivePage('blog-detail');
+        }
+      } else if (['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'blogs', 'admin'].includes(hash)) {
+        setActivePage(hash as PageType);
+        setSelectedBlogId(null);
+      }
     }
   }, []);
 
@@ -211,8 +222,16 @@ export default function App() {
     ));
   }, []);
 
-  const handleNavigate = (page: PageType) => {
-    setActivePage(page);
+  const handleNavigate = (page: PageType, blogId?: string) => {
+    if (page === 'blog-detail' && blogId) {
+      setSelectedBlogId(blogId);
+      setActivePage('blog-detail');
+      window.location.hash = `#blog-detail?id=${blogId}`;
+    } else {
+      setActivePage(page);
+      setSelectedBlogId(null);
+      window.location.hash = `#${page}`;
+    }
     // Scroll to top when navigating
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -264,6 +283,8 @@ export default function App() {
         return <AIStockAnalysisPage onNavigate={handleNavigate} />;
       case 'blogs':
         return <BlogsPage onNavigate={handleNavigate} />;
+      case 'blog-detail':
+        return selectedBlogId ? <BlogDetailPage blogId={selectedBlogId} onNavigate={handleNavigate} /> : <BlogsPage onNavigate={handleNavigate} />;
       case 'admin':
         return <AdminPage onNavigate={handleNavigate} />;
       default:
@@ -275,12 +296,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
-
-      <SnowFall
-        snowflakeCount={80}
-        style={{ position: 'fixed', width: '100%', height: '100%', zIndex: 1 }}
-      />
-
       <Navigation 
         activePage={activePage} 
         onNavigate={handleNavigate}
