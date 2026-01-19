@@ -128,6 +128,10 @@ app.use('/api/auth', authRoutes);
 const blogsRoutes = require('./routes/blogs.routes.js');
 app.use('/api/blogs', blogsRoutes);
 
+// Bucket live returns routes
+const bucketLiveReturnsRoutes = require('./routes/bucketLiveReturns.routes.js');
+app.use('/api/bucket-live-returns', bucketLiveReturnsRoutes);
+
 // Enhanced health check route with server statistics
 app.get('/api/health', (req, res) => {
   const uptime = Math.floor((Date.now() - startTime) / 1000);
@@ -177,6 +181,12 @@ app.get('/api/debug/env', (req, res) => {
 
 // --- Connect to Database ---
 // Connect to MongoDB before starting server (non-blocking)
+// Initialize scheduled jobs (if enabled) - must be before connectDB
+if (process.env.USE_NODE_CRON === 'true') {
+  require('./jobs/dailyRecalculation.job.js');
+  logger.info('Scheduled jobs initialized');
+}
+
 connectDB().then((connected) => {
   if (connected) {
     logger.info('Database connection established');

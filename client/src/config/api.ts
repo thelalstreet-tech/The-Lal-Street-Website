@@ -10,5 +10,6 @@ export const API_ENDPOINTS = {
   SUGGESTED_BUCKETS: `${API_BASE_URL}/api/suggested-buckets`,
   BLOGS: `${API_BASE_URL}/api/blogs`,
   HEALTH_CHECK: `${API_BASE_URL}/api/health`,
+  BUCKET_LIVE_RETURNS: `${API_BASE_URL}/api/bucket-live-returns`,
 } as const;
 
