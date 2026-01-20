@@ -48,15 +48,22 @@ const calculateXIRREnhanced = (cashflows) => {
     
     console.log('[XIRR] Calculating with transactions:', transactions.length);
     
-    // The result from the library is a rate (e.g., 0.12), so we multiply by 100.
+    // The xirr library may return either a number (rate) or an object { rate }
     const result = xirr(transactions);
-    
-    if (result && typeof result.rate === 'number' && !isNaN(result.rate)) {
-      return result.rate * 100;
-    } else {
-      console.log('[XIRR] Invalid result from xirr library:', result);
+
+    const rate = (() => {
+      if (result === null || result === undefined) return null;
+      if (typeof result === 'number' && !isNaN(result)) return result;
+      if (typeof result.rate === 'number' && !isNaN(result.rate)) return result.rate;
       return null;
+    })();
+
+    if (rate !== null) {
+      return rate * 100;
     }
+
+    console.log('[XIRR] Invalid result from xirr library:', result);
+    return null;
   } catch (error) {
     console.error('[XIRR Error]', error.message);
     return null; // Return null if calculation fails
