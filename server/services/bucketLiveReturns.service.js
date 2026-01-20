@@ -34,13 +34,16 @@ async function calculateBucketLiveReturns(bucket) {
     const navDataMap = {};
     for (const schemeCode of schemeCodes) {
       try {
-        const navData = await getHistoricalNav(schemeCode);
-        if (navData && navData.length > 0) {
+        const navResponse = await getHistoricalNav(schemeCode);
+        const navData = navResponse?.data || [];
+        if (navData.length > 0) {
           // Filter by date range
           navDataMap[schemeCode] = navData.filter(nav => {
             const navDate = new Date(nav.date);
             return navDate >= new Date(fetchStartDate) && navDate <= new Date(today);
           });
+        } else {
+          navDataMap[schemeCode] = [];
         }
       } catch (error) {
         logger.warn(`Failed to fetch NAV for scheme ${schemeCode}:`, error.message);
