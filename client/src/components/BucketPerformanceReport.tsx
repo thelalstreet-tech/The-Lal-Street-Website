@@ -251,7 +251,7 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
       // If API data is stale or not available, check local cache
       const fundHash = generateFundHash(bucket.funds.map(f => ({ id: f.id, weightage: f.weightage })));
       const cached = loadFromCache(bucket.id, fundHash);
-      
+
       if (cached) {
         setFundLiveReturns(cached.fundLiveReturns);
         setBucketLiveReturns(cached.bucketLiveReturns);
@@ -281,10 +281,10 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
         const launchDate = new Date(fund.launchDate);
         return launchDate < earliest ? launchDate : earliest;
       }, new Date(fiveYearsAgoStr));
-      const fetchStartDate = earliestLaunchDate < new Date(fiveYearsAgoStr) 
-        ? earliestLaunchDate.toISOString().split('T')[0] 
+      const fetchStartDate = earliestLaunchDate < new Date(fiveYearsAgoStr)
+        ? earliestLaunchDate.toISOString().split('T')[0]
         : fiveYearsAgoStr;
-      
+
       setLoadingProgress({ current: 0, total: 100, message: 'Fetching NAV data...' });
       await yieldToBrowser();
       const navResponses = await fetchNAVData(schemeCodes, fetchStartDate, today);
@@ -307,10 +307,10 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
 
       for (let fundIndex = 0; fundIndex < bucket.funds.length; fundIndex++) {
         const fund = bucket.funds[fundIndex];
-        setLoadingProgress({ 
-          current: fundIndex + 1, 
-          total: totalFunds, 
-          message: `Processing ${fund.name}...` 
+        setLoadingProgress({
+          current: fundIndex + 1,
+          total: totalFunds,
+          message: `Processing ${fund.name}...`
         });
         await yieldToBrowser();
         const navResponse = navResponses.find(nav => nav.schemeCode === fund.id);
@@ -354,17 +354,17 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
         const fundLaunchDate = new Date(fund.launchDate);
         const threeYearsFromLaunch = new Date(fundLaunchDate);
         threeYearsFromLaunch.setFullYear(threeYearsFromLaunch.getFullYear() + 3);
-        
+
         if (threeYearsFromLaunch <= new Date(today) && navResponse.navData.length > 0) {
           // Filter NAV data from launch date onwards and sort by date
           const navFromLaunch = navResponse.navData
             .filter(nav => new Date(nav.date) >= fundLaunchDate)
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          
+
           if (navFromLaunch.length > 0) {
             const rollingWindowDays = 1095; // 3 years
             const rollingReturns: number[] = [];
-            
+
             // Process in chunks to prevent UI blocking
             await processInChunks(
               navFromLaunch,
@@ -372,10 +372,10 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                 const startDate = new Date(startNav.date);
                 const targetEndDate = new Date(startDate);
                 targetEndDate.setDate(targetEndDate.getDate() + rollingWindowDays - 1);
-                
+
                 // Find NAV entry closest to 3 years from start date
                 const endNav = getLatestNAVBeforeDate(navFromLaunch, targetEndDate.toISOString().split('T')[0]);
-                
+
                 if (endNav && startNav.nav > 0 && endNav.nav > 0) {
                   const actualDays = (new Date(endNav.date).getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
                   // Allow tolerance (within 30 days) for missing NAV data
@@ -390,16 +390,16 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
               async (current, total) => {
                 // Update progress for this fund's calculation
                 if (current % 100 === 0 || current === total) {
-                  setLoadingProgress({ 
-                    current: fundIndex + 1, 
-                    total: totalFunds, 
-                    message: `Calculating rolling returns for ${fund.name} (${Math.round((current / total) * 100)}%)...` 
+                  setLoadingProgress({
+                    current: fundIndex + 1,
+                    total: totalFunds,
+                    message: `Calculating rolling returns for ${fund.name} (${Math.round((current / total) * 100)}%)...`
                   });
                   await yieldToBrowser(); // Yield after progress update
                 }
               }
             );
-            
+
             if (rollingReturns.length > 0) {
               const positiveCount = rollingReturns.filter(r => r > 0).length;
               positivePercentageFromLaunch = (positiveCount / rollingReturns.length) * 100;
@@ -433,11 +433,11 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
         const threeYearsAgoDate = new Date(threeYearsAgoStr);
         const firstDayOfMonth = new Date(threeYearsAgoDate.getFullYear(), threeYearsAgoDate.getMonth(), 1);
         let sipStartDate = firstDayOfMonth.toISOString().split('T')[0];
-        
+
         for (let month = 0; month < 36; month++) {
           const sipDate = addMonths(sipStartDate, month);
           const navEntry = getNextAvailableNAV(navResponse.navData, sipDate);
-          
+
           if (navEntry && navEntry.nav > 0) {
             const unitsPurchased = fundSIPMonthly / navEntry.nav;
             totalSIPUnits += unitsPurchased;
@@ -455,17 +455,17 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
 
         if (currentNavEntry && totalSIPUnits > 0) {
           sipCurrentValue = totalSIPUnits * currentNavEntry.nav;
-          
+
           // Add final value as positive cashflow for XIRR
           const sipCashFlowsForXIRR = [
             ...fundSipCashFlows,
             { date: new Date(currentNavEntry.date), amount: sipCurrentValue }
           ];
-          
+
           sipXIRR = calculateXIRR(sipCashFlowsForXIRR);
           totalSIPInvested += sipTotalInvested;
           totalSIPValue += sipCurrentValue;
-          
+
           // Add to bucket-level cashflows for XIRR
           sipCashFlows.push(...fundSipCashFlows);
         }
@@ -535,10 +535,10 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
 
       setLoadingProgress({ current: totalFunds, total: totalFunds, message: 'Finalizing calculations...' });
       await yieldToBrowser();
-      
+
       // Save to cache
       saveToCache(bucket.id, fundHash, fundMetrics, bucketReturns);
-      
+
       setFundLiveReturns(fundMetrics);
       setBucketLiveReturns(bucketReturns);
     } catch (err) {
@@ -620,7 +620,7 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
               {bucketLiveReturns && bucketLiveReturns.lumpsumReturnsPercent !== null ? `${bucketLiveReturns.lumpsumReturnsPercent >= 0 ? '+' : ''}${formatNumber(bucketLiveReturns.lumpsumReturnsPercent)}%` : isLoading ? '...' : 'N/A'}
             </p>
           </div>
-          
+
           {/* CAGR (3yr and 5yr stacked) */}
           <div className="p-2 sm:p-3 md:p-4 bg-purple-50 rounded-lg">
             <p className="text-xs text-gray-600 mb-0.5 sm:mb-1">CAGR - 3 Yr</p>
@@ -632,7 +632,7 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
               {bucketLiveReturns && bucketLiveReturns.bucketCagr5Y !== null ? `${formatNumber(bucketLiveReturns.bucketCagr5Y)}%` : isLoading ? '...' : 'N/A'}
             </p>
           </div>
-          
+
           {/* Max and Min Returns (stacked) */}
           <div className="p-2 sm:p-3 md:p-4 bg-emerald-50 rounded-lg">
             <p className="text-xs text-gray-600 mb-0.5 sm:mb-1">Maximum Return</p>
@@ -644,7 +644,7 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
               {formatNumber(rollingReturns.bucket.min)}%
             </p>
           </div>
-          
+
           {/* Positive Periods */}
           <div className="p-2 sm:p-3 md:p-4 bg-blue-50 rounded-lg">
             <p className="text-xs text-gray-600 mb-0.5 sm:mb-1">Positive Periods</p>
@@ -665,10 +665,10 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                 <TableHead>Fund Name</TableHead>
                 <TableHead>NAV</TableHead>
                 <TableHead>CAGR - 3 Yr</TableHead>
-                <TableHead>CAGR - 5 Yr</TableHead>
-                <TableHead>Positive Periods</TableHead>
-                <TableHead>Max Return</TableHead>
-                <TableHead>Min Return</TableHead>
+                <TableHead className="hidden md:table-cell">CAGR - 5 Yr</TableHead>
+                <TableHead className="hidden lg:table-cell">Positive Periods</TableHead>
+                <TableHead className="hidden sm:table-cell">Max Return</TableHead>
+                <TableHead className="hidden sm:table-cell">Min Return</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -677,8 +677,8 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                 const liveData = fundLiveReturns.find(f => f.fundId === fundData.fundId);
                 return (
                   <TableRow key={fundData.fundId}>
-                    <TableCell className="font-medium max-w-[120px] sm:max-w-xs truncate text-xs sm:text-sm">
-                      {fundData.fundName}
+                    <TableCell className="font-medium min-w-[140px] sm:min-w-[200px] text-xs sm:text-sm">
+                      <span className="block whitespace-normal break-words">{fundData.fundName}</span>
                     </TableCell>
                     <TableCell className="text-xs sm:text-sm">
                       {liveData && liveData.currentNAV !== null ? formatCurrency(liveData.currentNAV) : isLoading ? '...' : 'N/A'}
@@ -686,30 +686,30 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                     <TableCell className={`text-xs sm:text-sm ${liveData && liveData.cagr3Y !== null && liveData.cagr3Y >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}`}>
                       {liveData && liveData.cagr3Y !== null ? `${formatNumber(liveData.cagr3Y)}%` : isLoading ? '...' : 'N/A'}
                     </TableCell>
-                    <TableCell className={`text-xs sm:text-sm ${liveData && liveData.cagr5Y !== null && liveData.cagr5Y >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}`}>
+                    <TableCell className={`hidden md:table-cell text-xs sm:text-sm ${liveData && liveData.cagr5Y !== null && liveData.cagr5Y >= 0 ? 'text-green-700 font-semibold' : 'text-red-700 font-semibold'}`}>
                       {liveData && liveData.cagr5Y !== null ? `${formatNumber(liveData.cagr5Y)}%` : isLoading ? '...' : 'N/A'}
                     </TableCell>
-                    <TableCell className="text-xs sm:text-sm">
+                    <TableCell className="hidden lg:table-cell text-xs sm:text-sm">
                       <div className="flex items-center gap-1 sm:gap-2">
-                        <span className={liveData && liveData.positivePercentageFromLaunch !== null 
+                        <span className={liveData && liveData.positivePercentageFromLaunch !== null
                           ? (liveData.positivePercentageFromLaunch >= 70 ? 'text-green-700' : liveData.positivePercentageFromLaunch >= 50 ? 'text-yellow-700' : 'text-red-700')
                           : (fundData.positivePercentage >= 70 ? 'text-green-700' : fundData.positivePercentage >= 50 ? 'text-yellow-700' : 'text-red-700')
                         }>
-                          {liveData && liveData.positivePercentageFromLaunch !== null 
+                          {liveData && liveData.positivePercentageFromLaunch !== null
                             ? formatNumber(liveData.positivePercentageFromLaunch)
                             : formatNumber(fundData.positivePercentage)
                           }%
                         </span>
-                        {((liveData && liveData.positivePercentageFromLaunch !== null && liveData.positivePercentageFromLaunch >= 70) || 
+                        {((liveData && liveData.positivePercentageFromLaunch !== null && liveData.positivePercentageFromLaunch >= 70) ||
                           (liveData && liveData.positivePercentageFromLaunch === null && fundData.positivePercentage >= 70)) && (
-                          <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
-                        )}
+                            <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
+                          )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-green-700 text-xs sm:text-sm">
+                    <TableCell className="hidden sm:table-cell text-green-700 text-xs sm:text-sm">
                       {formatNumber(fundData.max)}%
                     </TableCell>
-                    <TableCell className="text-red-700 text-xs sm:text-sm">
+                    <TableCell className="hidden sm:table-cell text-red-700 text-xs sm:text-sm">
                       {formatNumber(fundData.min)}%
                     </TableCell>
                   </TableRow>
