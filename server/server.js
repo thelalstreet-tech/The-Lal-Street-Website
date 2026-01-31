@@ -28,20 +28,20 @@ const startTime = Date.now();
 // --- Middlewares ---
 // CORS Configuration - allows frontend to connect from different domain
 // In production, set ALLOWED_ORIGINS env variable
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
+const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
   : ['http://localhost:5173', 'http://localhost:3000'];
 
 app.use(cors({
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
-    
+
     // In development mode, allow all origins
     if (process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
-    
+
     // Check if origin is in allowed list
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -69,7 +69,7 @@ app.use(passport.initialize());
 app.use((req, res, next) => {
   requestCount++;
   const originalSend = res.send;
-  res.send = function(data) {
+  res.send = function (data) {
     if (res.statusCode >= 400) errorCount++;
     return originalSend.apply(res, arguments);
   };
@@ -132,12 +132,16 @@ app.use('/api/blogs', blogsRoutes);
 const bucketLiveReturnsRoutes = require('./routes/bucketLiveReturns.routes.js');
 app.use('/api/bucket-live-returns', bucketLiveReturnsRoutes);
 
+// News aggregation routes
+const newsRoutes = require('./routes/news.routes.js');
+app.use('/api/news', newsRoutes);
+
 // Enhanced health check route with server statistics
 app.get('/api/health', (req, res) => {
   const uptime = Math.floor((Date.now() - startTime) / 1000);
   const memoryUsage = process.memoryUsage();
-  
-  res.json({ 
+
+  res.json({
     status: 'ok',
     message: 'Backend server is running successfully!',
     uptime: `${uptime}s`,
@@ -150,8 +154,8 @@ app.get('/api/health', (req, res) => {
     stats: {
       totalRequests: requestCount,
       errorCount: errorCount,
-      successRate: requestCount > 0 
-        ? ((requestCount - errorCount) / requestCount * 100).toFixed(2) + '%' 
+      successRate: requestCount > 0
+        ? ((requestCount - errorCount) / requestCount * 100).toFixed(2) + '%'
         : '100%'
     }
   });
@@ -168,9 +172,9 @@ app.get('/api/debug/env', (req, res) => {
     hasJWTSecret: !!process.env.JWT_SECRET,
     nodeEnv: process.env.NODE_ENV,
     // Don't expose actual secrets, just show if they exist
-    googleClientIdPreview: process.env.GOOGLE_CLIENT_ID ? 
+    googleClientIdPreview: process.env.GOOGLE_CLIENT_ID ?
       process.env.GOOGLE_CLIENT_ID.substring(0, 20) + '...' : 'NOT SET',
-    allEnvKeys: Object.keys(process.env).filter(key => 
+    allEnvKeys: Object.keys(process.env).filter(key =>
       key.includes('GOOGLE') || key.includes('MONGODB') || key.includes('JWT')
     )
   });
@@ -184,6 +188,7 @@ app.get('/api/debug/env', (req, res) => {
 // Initialize scheduled jobs (if enabled) - must be before connectDB
 if (process.env.USE_NODE_CRON === 'true') {
   require('./jobs/dailyRecalculation.job.js');
+  require('./jobs/newsRefresh.job.js');
   logger.info('Scheduled jobs initialized');
 }
 
@@ -216,7 +221,7 @@ const gracefulShutdown = (signal) => {
     logger.info('Cleaning up resources...');
     process.exit(0);
   });
-  
+
   // Force close after 10 seconds
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');

@@ -7,6 +7,7 @@ import { FinancialPlanningPage } from './components/FinancialPlanningPage';
 import { AIStockAnalysisPage } from './components/AIStockAnalysisPage';
 import { BlogsPage } from './components/BlogsPage';
 import { BlogDetailPage } from './components/BlogDetailPage';
+import { NewsPage } from './components/NewsPage';
 import { AdminPage } from './components/AdminPage';
 import { Footer } from './components/Footer';
 import { LoginModal } from './components/LoginModal';
@@ -27,36 +28,36 @@ export interface SelectedFund extends Fund {
   weightage: number;
 }
 
-export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'blogs' | 'blog-detail' | 'admin';
+export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'blogs' | 'blog-detail' | 'news' | 'admin';
 
 // Utility function to distribute 100% weightage as whole numbers
 const distributeWeightage = (count: number): number[] => {
   if (count === 0) return [];
-  
+
   const baseWeight = Math.floor(100 / count);
   const remainder = 100 - (baseWeight * count);
-  
+
   // Create array with base weights
   const weights = new Array(count).fill(baseWeight);
-  
+
   // Distribute remainder by adding 1 to the first 'remainder' funds
   for (let i = 0; i < remainder; i++) {
     weights[i] += 1;
   }
-  
+
   return weights;
 };
 
 export default function App() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
-  
+
   // Separate fund selections for Investment and Retirement plans
   const [investmentFunds, setInvestmentFunds] = useState<SelectedFund[]>([]);
   const [retirementFunds, setRetirementFunds] = useState<SelectedFund[]>([]);
   const [activePage, setActivePage] = useState<PageType>('home');
   const [buckets, setBuckets] = useState<Bucket[]>([]);
   const [selectedBlogId, setSelectedBlogId] = useState<string | null>(null);
-  
+
   // Login modal state
   const [showLoginModal, setShowLoginModal] = useState(false);
 
@@ -126,21 +127,21 @@ export default function App() {
       alert('Maximum 5 funds allowed in the bucket. Please remove a fund before adding a new one.');
       return;
     }
-    
+
     const newCount = investmentFunds.length + 1;
     const weights = distributeWeightage(newCount);
-    
+
     const updatedFunds = investmentFunds.map((f, index) => ({
       ...f,
       weightage: weights[index]
     }));
-    
+
     setInvestmentFunds([...updatedFunds, { ...fund, weightage: weights[newCount - 1] }]);
   };
 
   const handleRemoveInvestmentFund = (fundId: string) => {
     const filtered = investmentFunds.filter(f => f.id !== fundId);
-    
+
     if (filtered.length > 0) {
       const weights = distributeWeightage(filtered.length);
       const redistributed = filtered.map((f, index) => ({
@@ -154,7 +155,7 @@ export default function App() {
   };
 
   const handleInvestmentWeightageChange = (fundId: string, weightage: number) => {
-    setInvestmentFunds(investmentFunds.map(f => 
+    setInvestmentFunds(investmentFunds.map(f =>
       f.id === fundId ? { ...f, weightage } : f
     ));
   };
@@ -166,21 +167,21 @@ export default function App() {
       alert('Maximum 5 funds allowed in the bucket. Please remove a fund before adding a new one.');
       return;
     }
-    
+
     const newCount = retirementFunds.length + 1;
     const weights = distributeWeightage(newCount);
-    
+
     const updatedFunds = retirementFunds.map((f, index) => ({
       ...f,
       weightage: weights[index]
     }));
-    
+
     setRetirementFunds([...updatedFunds, { ...fund, weightage: weights[newCount - 1] }]);
   };
 
   const handleRemoveRetirementFund = (fundId: string) => {
     const filtered = retirementFunds.filter(f => f.id !== fundId);
-    
+
     if (filtered.length > 0) {
       const weights = distributeWeightage(filtered.length);
       const redistributed = filtered.map((f, index) => ({
@@ -194,7 +195,7 @@ export default function App() {
   };
 
   const handleRetirementWeightageChange = (fundId: string, weightage: number) => {
-    setRetirementFunds(retirementFunds.map(f => 
+    setRetirementFunds(retirementFunds.map(f =>
       f.id === fundId ? { ...f, weightage } : f
     ));
   };
@@ -215,8 +216,8 @@ export default function App() {
   }, []);
 
   const handleAddFundsToBucket = useCallback((bucketId: string, funds: SelectedFund[]) => {
-    setBuckets(prev => prev.map(bucket => 
-      bucket.id === bucketId 
+    setBuckets(prev => prev.map(bucket =>
+      bucket.id === bucketId
         ? { ...bucket, funds: [...funds] }
         : bucket
     ));
@@ -249,7 +250,7 @@ export default function App() {
     } else {
       setRetirementFunds(fundsToImport);
     }
-    
+
     // Navigate to the target page
     setActivePage(targetPage === 'investment' ? 'investment-plan' : 'retirement-plan');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -285,6 +286,8 @@ export default function App() {
         return <BlogsPage onNavigate={handleNavigate} />;
       case 'blog-detail':
         return selectedBlogId ? <BlogDetailPage blogId={selectedBlogId} onNavigate={handleNavigate} /> : <BlogsPage onNavigate={handleNavigate} />;
+      case 'news':
+        return <NewsPage onNavigate={handleNavigate} />;
       case 'admin':
         return <AdminPage onNavigate={handleNavigate} />;
       default:
@@ -296,19 +299,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50">
-      <Navigation 
-        activePage={activePage} 
+      <Navigation
+        activePage={activePage}
         onNavigate={handleNavigate}
         selectedFundsCount={totalFundsCount}
       />
-      
+
       <main className="flex-1">
         {renderPage()}
       </main>
-      
+
       {/* Footer */}
       <Footer />
-      
+
       {/* Hidden Admin Login Button - Very Subtle, Bottom Right Corner */}
       {activePage === 'home' && (
         <button
