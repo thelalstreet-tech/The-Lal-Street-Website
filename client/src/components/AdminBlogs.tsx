@@ -4,12 +4,12 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Switch } from './ui/switch';
-import { Plus, Edit, Trash2, Save, X, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, Loader2 } from 'lucide-react';
+import { RichTextEditor } from './RichTextEditor';
 import type { Blog, Category, Tag } from '../types/blog';
 import {
   fetchBlogs,
@@ -341,7 +341,7 @@ export function AdminBlogs() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={handleCloseDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[90vw] w-full lg:max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Edit Blog' : 'Create New Blog'}</DialogTitle>
             <DialogDescription>
@@ -350,6 +350,7 @@ export function AdminBlogs() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Title - First */}
             <div>
               <Label htmlFor="title">Title *</Label>
               <Input
@@ -357,24 +358,13 @@ export function AdminBlogs() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Enter blog title"
-                className="mt-1"
+                className="mt-1 text-lg font-medium"
               />
             </div>
 
+            {/* Cover Image - Second */}
             <div>
-              <Label htmlFor="content">Content *</Label>
-              <Textarea
-                id="content"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder="Enter blog content (supports HTML formatting)"
-                rows={10}
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="image">Image *</Label>
+              <Label htmlFor="image">Cover Image *</Label>
               <div className="mt-1 space-y-2">
                 <Input
                   id="image"
@@ -407,6 +397,19 @@ export function AdminBlogs() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Content - Third with Rich Text Editor */}
+            <div>
+              <Label htmlFor="content">Content *</Label>
+              <p className="text-xs text-gray-500 mb-2">
+                Use the toolbar to format text, add images inline, create links, and more.
+              </p>
+              <RichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Start writing your blog content..."
+              />
             </div>
 
             <div>

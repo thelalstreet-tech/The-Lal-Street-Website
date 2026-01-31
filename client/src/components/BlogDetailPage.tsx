@@ -122,7 +122,35 @@ export function BlogDetailPage({ blogId, onNavigate }: BlogDetailPageProps) {
 
       {/* Main Content */}
       <article className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Image */}
+        {/* Title - First */}
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+          {blog.title}
+        </h1>
+
+        {/* Meta Information */}
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm text-gray-600 mb-6">
+          <span className="flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            {formatDate(blog.createdAt)}
+          </span>
+          <span className="flex items-center gap-2">
+            <Eye className="w-4 h-4" />
+            {blog.views || 0} views
+          </span>
+          {blog.author && (
+            <span className="flex items-center gap-2">
+              <User className="w-4 h-4" />
+              {blog.author}
+            </span>
+          )}
+          {blog.exclusive && (
+            <Badge className="bg-purple-600 text-white">
+              Exclusive
+            </Badge>
+          )}
+        </div>
+
+        {/* Cover Image - Second */}
         <div className="aspect-video relative overflow-hidden rounded-xl mb-8 bg-gray-200 shadow-lg">
           <OptimizedImage
             src={blog.imageUrl}
@@ -131,37 +159,10 @@ export function BlogDetailPage({ blogId, onNavigate }: BlogDetailPageProps) {
             aspectRatio="16/9"
             fallbackSrc="https://via.placeholder.com/1200x600?text=No+Image"
           />
-          {blog.exclusive && (
-            <Badge className="absolute top-4 right-4 bg-purple-600 text-white">
-              Exclusive
-            </Badge>
-          )}
         </div>
 
-        {/* Content */}
-        <div className="bg-white rounded-xl shadow-sm p-8">
-          {/* Title */}
-          <h1 className="text-4xl font-bold text-gray-900 mb-4 leading-tight">
-            {blog.title}
-          </h1>
-
-          {/* Meta Information */}
-          <div className="flex items-center gap-6 text-sm text-gray-600 mb-6 pb-6 border-b border-gray-200">
-            <span className="flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              {formatDate(blog.createdAt)}
-            </span>
-            <span className="flex items-center gap-2">
-              <Eye className="w-4 h-4" />
-              {blog.views || 0} views
-            </span>
-            {blog.author && (
-              <span className="flex items-center gap-2">
-                <User className="w-4 h-4" />
-                {blog.author}
-              </span>
-            )}
-          </div>
+        {/* Content Card */}
+        <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8">
 
           {/* Categories and Tags */}
           <div className="flex flex-wrap gap-2 mb-8">
@@ -188,13 +189,114 @@ export function BlogDetailPage({ blogId, onNavigate }: BlogDetailPageProps) {
 
           {/* Blog Content */}
           <div
-            className="blog-content text-gray-700 leading-relaxed space-y-4 prose prose-lg max-w-none"
+            className="blog-content text-gray-700 leading-relaxed prose prose-lg max-w-none"
             dangerouslySetInnerHTML={{ __html: blog.content }}
-            style={{
-              fontSize: '1.125rem',
-              lineHeight: '1.75rem',
-            }}
           />
+          <style>{`
+            .blog-content {
+              font-size: 1.125rem;
+              line-height: 1.875;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+              max-width: 100%;
+            }
+            .blog-content p {
+              margin-bottom: 1rem;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .blog-content h1 {
+              font-size: 1.75rem;
+              font-weight: 700;
+              margin-top: 2rem;
+              margin-bottom: 1rem;
+              color: #111827;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .blog-content h2 {
+              font-size: 1.5rem;
+              font-weight: 600;
+              margin-top: 1.75rem;
+              margin-bottom: 0.75rem;
+              color: #1f2937;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .blog-content h3 {
+              font-size: 1.25rem;
+              font-weight: 600;
+              margin-top: 1.5rem;
+              margin-bottom: 0.5rem;
+              color: #374151;
+              word-wrap: break-word;
+              overflow-wrap: break-word;
+            }
+            .blog-content img {
+              max-width: 100%;
+              height: auto;
+              border-radius: 0.75rem;
+              margin: 1.5rem 0;
+              box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            }
+            .blog-content a {
+              color: #2563eb;
+              text-decoration: underline;
+              font-weight: 500;
+            }
+            .blog-content a:hover {
+              color: #1d4ed8;
+            }
+            .blog-content ul,
+            .blog-content ol {
+              margin: 1rem 0;
+              padding-left: 1.5rem;
+            }
+            .blog-content ul {
+              list-style-type: disc;
+            }
+            .blog-content ol {
+              list-style-type: decimal;
+            }
+            .blog-content li {
+              margin-bottom: 0.5rem;
+            }
+            .blog-content strong {
+              font-weight: 700;
+              color: #111827;
+            }
+            .blog-content em {
+              font-style: italic;
+            }
+            .blog-content u {
+              text-decoration: underline;
+            }
+            .blog-content s {
+              text-decoration: line-through;
+            }
+            .blog-content blockquote {
+              border-left: 4px solid #e5e7eb;
+              padding-left: 1rem;
+              margin: 1.5rem 0;
+              font-style: italic;
+              color: #6b7280;
+            }
+            .blog-content .ql-align-center {
+              text-align: center;
+            }
+            .blog-content .ql-align-right {
+              text-align: right;
+            }
+            .blog-content .ql-align-justify {
+              text-align: justify;
+            }
+            .blog-content .ql-indent-1 {
+              padding-left: 3em;
+            }
+            .blog-content .ql-indent-2 {
+              padding-left: 6em;
+            }
+          `}</style>
         </div>
       </article>
     </div>
