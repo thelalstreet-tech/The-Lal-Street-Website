@@ -30,7 +30,7 @@ import {
   Legend as RechartsLegend,
   ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, TrendingDown, Info, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Info, Loader2, Download } from 'lucide-react';
 import type { SelectedFund } from '../../App';
 import { fetchNAVData } from '../../services/navService';
 import { SimpleRollingReturnCard } from '../SimpleRollingReturnCard';
@@ -52,6 +52,7 @@ import {
   TooltipTrigger,
   TooltipProvider,
 } from '../ui/tooltip';
+import { generateSWPReport } from '../../utils/pdfGenerator';
 
 interface SWPCalculatorProps {
   funds: SelectedFund[];
@@ -81,18 +82,18 @@ interface ChartPoint {
 }
 
 interface FundSummary {
-    fundId: string;
-    fundName: string;
-    weightage: number;
+  fundId: string;
+  fundName: string;
+  weightage: number;
   navAtPurchase: number;
   unitsPurchased: number;
-    remainingUnits: number;
+  remainingUnits: number;
   totalWithdrawn: number;
-    currentValue: number;
+  currentValue: number;
 }
 
 interface TableRowData {
-    date: string;
+  date: string;
   fundId: string;
   fundName: string;
   navDate: string;
@@ -209,10 +210,10 @@ const frequencyLabel = (frequency: Frequency, customDays: number) => {
   return `every ${customDays} days`;
 };
 
-export function SWPCalculator({ 
-  funds, 
-  initialInvestment, 
-  initialWithdrawal, 
+export function SWPCalculator({
+  funds,
+  initialInvestment,
+  initialWithdrawal,
   initialFrequency,
   initialDuration,
   hideAdvanced = false,
@@ -256,6 +257,27 @@ export function SWPCalculator({
     });
   }, [funds]);
 
+  // Reset results on input change
+  useEffect(() => {
+    setResult(null);
+    setInsights(null);
+  }, [
+    funds,
+    purchaseDate,
+    swpStartDate,
+    endDate,
+    totalInvestment,
+    withdrawalAmount,
+    frequency,
+    customFrequencyDays,
+    strategy,
+    fundRisk,
+    mode,
+    desiredWithdrawal,
+    durationYears,
+    riskFactor
+  ]);
+
   // Set initial values from props if provided
   useEffect(() => {
     if (initialInvestment && initialInvestment > 0) {
@@ -275,7 +297,7 @@ export function SWPCalculator({
     setMode(nextMode);
     setError(null);
   };
-  
+
   // Lock mode if forced
   useEffect(() => {
     if (forcedMode) {
@@ -324,7 +346,7 @@ export function SWPCalculator({
     if (isLoading) {
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -452,7 +474,7 @@ export function SWPCalculator({
             annualWithdrawal *
             (1 - Math.pow(1 + adjustedReturnRate, -durationYears)) /
             adjustedReturnRate;
-                } else {
+        } else {
           requiredCorpusFixedHorizon = annualWithdrawal * durationYears;
         }
       }
@@ -464,16 +486,16 @@ export function SWPCalculator({
       const corpusForTarget =
         mode === 'TARGET'
           ? (() => {
-              const horizonCorpus =
-                durationYears > 0 && requiredCorpusFixedHorizon && requiredCorpusFixedHorizon > 0
-                  ? requiredCorpusFixedHorizon
-                  : null;
-              const indefiniteCorpus =
-                requiredCorpusIndefinite && requiredCorpusIndefinite > 0
-                  ? requiredCorpusIndefinite
-                  : null;
-              return horizonCorpus ?? indefiniteCorpus ?? null;
-            })()
+            const horizonCorpus =
+              durationYears > 0 && requiredCorpusFixedHorizon && requiredCorpusFixedHorizon > 0
+                ? requiredCorpusFixedHorizon
+                : null;
+            const indefiniteCorpus =
+              requiredCorpusIndefinite && requiredCorpusIndefinite > 0
+                ? requiredCorpusIndefinite
+                : null;
+            return horizonCorpus ?? indefiniteCorpus ?? null;
+          })()
           : null;
 
       if (mode === 'CORPUS') {
@@ -497,7 +519,7 @@ export function SWPCalculator({
         setAutoCorpus(corpusForTarget);
         setTotalInvestment(corpusForTarget);
         setWithdrawalAmount(desiredWithdrawal);
-        } else {
+      } else {
         // Normal mode: reset auto hints
         setAutoWithdrawal(null);
         setAutoCorpus(null);
@@ -567,7 +589,7 @@ export function SWPCalculator({
         const finalNavPoint =
           navMap[fund.id] && navMap[fund.id].length > 0
             ? getLatestNAVBeforeDate(navMap[fund.id], endDate) ||
-              navMap[fund.id][navMap[fund.id].length - 1]
+            navMap[fund.id][navMap[fund.id].length - 1]
             : null;
         const finalNav = finalNavPoint?.nav ?? 0;
         const currentValue = round2(remainingUnits * finalNav);
@@ -655,8 +677,8 @@ export function SWPCalculator({
           const navPoint = sale
             ? { date: sale.navDate, nav: sale.nav }
             : series && series.length > 0
-            ? getLatestNAVBeforeDate(series, entry.date) || series[series.length - 1]
-            : null;
+              ? getLatestNAVBeforeDate(series, entry.date) || series[series.length - 1]
+              : null;
 
           const navValue = navPoint?.nav ?? 0;
           const navDate = navPoint?.date ?? entry.date;
@@ -693,8 +715,8 @@ export function SWPCalculator({
           });
         });
       });
-    
-    setResult({
+
+      setResult({
         totalInvested: simulationTotalInvestment,
         totalWithdrawn: round2(simulation.totals.withdrawn),
         finalCorpus,
@@ -720,6 +742,32 @@ export function SWPCalculator({
     }
   };
 
+  const handleDownloadReport = () => {
+    if (!result) return;
+    generateSWPReport({
+      ...result,
+      fundSummaries: result.fundSummaries.map(f => {
+        const totalInvested = f.unitsPurchased * f.navAtPurchase;
+        const profit = f.currentValue + f.totalWithdrawn - totalInvested;
+        return {
+          fundName: f.fundName,
+          totalInvested,
+          totalWithdrawn: f.totalWithdrawn,
+          currentValue: f.currentValue,
+          profit
+        };
+      }),
+      inputs: {
+        totalInvestment,
+        withdrawalAmount,
+        frequency,
+        startDate: purchaseDate,
+        endDate,
+        funds: funds.map(f => ({ name: f.name, weightage: f.weightage }))
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-4 sm:p-6">
@@ -738,9 +786,9 @@ export function SWPCalculator({
             {/* NORMAL Mode */}
             <TabsContent value="NORMAL">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+                <div>
                   <Label htmlFor="total-investment-normal">Total Investment (₹)</Label>
-              <Input
+                  <Input
                     id="total-investment-normal"
                     type="number"
                     min={1}
@@ -751,8 +799,8 @@ export function SWPCalculator({
                     }}
                     placeholder="500000"
                     className="mt-1"
-              />
-            </div>
+                  />
+                </div>
                 <div>
                   <Label htmlFor="withdrawal-amount-normal">Monthly Withdrawal (₹)</Label>
                   <Input
@@ -774,9 +822,9 @@ export function SWPCalculator({
             {/* CORPUS Mode */}
             <TabsContent value="CORPUS">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+                <div>
                   <Label htmlFor="total-investment-corpus">Total Investment (₹)</Label>
-              <Input
+                  <Input
                     id="total-investment-corpus"
                     type="number"
                     min={1}
@@ -787,8 +835,8 @@ export function SWPCalculator({
                     }}
                     placeholder="500000"
                     className="mt-1"
-              />
-            </div>
+                  />
+                </div>
                 <div>
                   <Label htmlFor="auto-withdrawal">
                     Safe Withdrawal ({frequencyDescriptor}) (₹)
@@ -816,11 +864,11 @@ export function SWPCalculator({
             {/* TARGET Mode */}
             <TabsContent value="TARGET">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
+                <div>
                   <Label htmlFor="desired-withdrawal-target">Desired {frequencyDescriptor} Withdrawal (₹)</Label>
-              <Input
+                  <Input
                     id="desired-withdrawal-target"
-                type="number"
+                    type="number"
                     min={1}
                     value={desiredWithdrawal || ''}
                     onChange={(event) => {
@@ -856,7 +904,7 @@ export function SWPCalculator({
                     id="duration-years"
                     type="number"
                     min={0}
-                  max={100}
+                    max={100}
                     value={durationYears || ''}
                     onChange={(event) => {
                       const value = Number(event.target.value) || 0;
@@ -900,15 +948,15 @@ export function SWPCalculator({
                     id="withdrawal-amount-normal"
                     type="number"
                     min={1}
-              value={withdrawalAmount}
+                    value={withdrawalAmount}
                     onChange={(event) => {
                       const value = Number(event.target.value) || 0;
                       setWithdrawalAmount(value >= 0 ? value : 0);
                     }}
                     placeholder="15000"
                     className="mt-1"
-              />
-            </div>
+                  />
+                </div>
               </div>
             )}
 
@@ -966,9 +1014,9 @@ export function SWPCalculator({
                       min={1}
                       value={desiredWithdrawal || ''}
                       onChange={(event) => {
-                      const value = Number(event.target.value) || 0;
-                      setDesiredWithdrawal(value >= 0 ? value : 0);
-                    }}
+                        const value = Number(event.target.value) || 0;
+                        setDesiredWithdrawal(value >= 0 ? value : 0);
+                      }}
                       placeholder="20000"
                       className="mt-1"
                     />
@@ -1003,9 +1051,9 @@ export function SWPCalculator({
                       min={0}
                       value={durationYears || ''}
                       onChange={(event) => {
-                      const value = Number(event.target.value) || 0;
-                      setDurationYears(value >= 0 && value <= 100 ? value : (value < 0 ? 0 : 100));
-                    }}
+                        const value = Number(event.target.value) || 0;
+                        setDurationYears(value >= 0 && value <= 100 ? value : (value < 0 ? 0 : 100));
+                      }}
                       placeholder="15"
                       className="mt-1"
                     />
@@ -1138,93 +1186,93 @@ export function SWPCalculator({
               <span>{showAdvanced ? '−' : '+'}</span>
             </button>
             {showAdvanced && (
-            <div className="px-4 pb-4 pt-2 space-y-4">
-          <div>
-                <Label htmlFor="risk-factor">Risk factor</Label>
-                <Input
-                  id="risk-factor"
-                  type="number"
-                  min={0.1}
-                  max={10}
-                step={0.1}
-                  value={riskFactor}
-                  onChange={(event) => {
-                    const value = Number(event.target.value) || 3;
-                    setRiskFactor(value >= 0.1 && value <= 10 ? value : (value < 0.1 ? 0.1 : 10));
-                  }}
-                  className="mt-1"
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Higher risk factor = more conservative withdrawal rate. Default is 3.
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="strategy">Withdrawal Strategy</Label>
-                <Select
-                  value={strategy}
-                  onValueChange={(value) => setStrategy(value as SWPStrategy)}
-                >
-                  <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                    <SelectItem value="PROPORTIONAL">
-                      Proportional by target weights (default)
-                    </SelectItem>
-                    <SelectItem value="OVERWEIGHT_FIRST">
-                      Overweight first (harvest gains)
-                    </SelectItem>
-                    <SelectItem value="RISK_BUCKET">
-                      Risk bucket (sell lowest risk first)
-                    </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-              {strategy === 'RISK_BUCKET' && (
-                <div className="space-y-3">
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-                    Withdrawals will use the following bucket order:{' '}
-                    <strong>
-                      {DEFAULT_RISK_ORDER.map((bucket) => RISK_BUCKET_LABELS[bucket]).join(
-                        ' → '
-                      )}
-                    </strong>
+              <div className="px-4 pb-4 pt-2 space-y-4">
+                <div>
+                  <Label htmlFor="risk-factor">Risk factor</Label>
+                  <Input
+                    id="risk-factor"
+                    type="number"
+                    min={0.1}
+                    max={10}
+                    step={0.1}
+                    value={riskFactor}
+                    onChange={(event) => {
+                      const value = Number(event.target.value) || 3;
+                      setRiskFactor(value >= 0.1 && value <= 10 ? value : (value < 0.1 ? 0.1 : 10));
+                    }}
+                    className="mt-1"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Higher risk factor = more conservative withdrawal rate. Default is 3.
                   </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {funds.map((fund) => (
-                      <div key={fund.id}>
-                        <Label className="text-xs text-slate-600">
-                          {fund.name} — Risk bucket
-                        </Label>
-                        <Select
-                          value={fundRisk[fund.id]}
-                          onValueChange={(value) =>
-                            setFundRisk((prev) => ({ ...prev, [fund.id]: value }))
-                          }
-                        >
-                          <SelectTrigger className="mt-1">
-                            <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                            {DEFAULT_RISK_ORDER.map((bucket) => (
-                              <SelectItem key={bucket} value={bucket}>
-                                {RISK_BUCKET_LABELS[bucket]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-                      </div>
-                    ))}
-                  </div>
-                    </div>
-                  )}
                 </div>
+                <div>
+                  <Label htmlFor="strategy">Withdrawal Strategy</Label>
+                  <Select
+                    value={strategy}
+                    onValueChange={(value) => setStrategy(value as SWPStrategy)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="PROPORTIONAL">
+                        Proportional by target weights (default)
+                      </SelectItem>
+                      <SelectItem value="OVERWEIGHT_FIRST">
+                        Overweight first (harvest gains)
+                      </SelectItem>
+                      <SelectItem value="RISK_BUCKET">
+                        Risk bucket (sell lowest risk first)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {strategy === 'RISK_BUCKET' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                      Withdrawals will use the following bucket order:{' '}
+                      <strong>
+                        {DEFAULT_RISK_ORDER.map((bucket) => RISK_BUCKET_LABELS[bucket]).join(
+                          ' → '
+                        )}
+                      </strong>
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {funds.map((fund) => (
+                        <div key={fund.id}>
+                          <Label className="text-xs text-slate-600">
+                            {fund.name} — Risk bucket
+                          </Label>
+                          <Select
+                            value={fundRisk[fund.id]}
+                            onValueChange={(value) =>
+                              setFundRisk((prev) => ({ ...prev, [fund.id]: value }))
+                            }
+                          >
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DEFAULT_RISK_ORDER.map((bucket) => (
+                                <SelectItem key={bucket} value={bucket}>
+                                  {RISK_BUCKET_LABELS[bucket]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
 
-              <Button
+        <Button
           onClick={calculateSWP}
           disabled={
             isLoading ||
@@ -1237,17 +1285,17 @@ export function SWPCalculator({
           className="w-full mt-6"
           title={
             isLoading ? 'Calculating...' :
-            !purchaseDate ? 'Please select Investment Date' :
-            !swpStartDate ? 'Please select SWP Start Date' :
-            !endDate ? 'Please select End Date' :
-            funds.length === 0 ? 'Please select at least one fund' :
-            mode === 'TARGET' && (desiredWithdrawal <= 0 || isNaN(desiredWithdrawal)) ? 'Please enter desired withdrawal amount' :
-            mode !== 'TARGET' && totalInvestment <= 0 ? 'Please enter total investment amount' :
-            'Click to run simulation'
+              !purchaseDate ? 'Please select Investment Date' :
+                !swpStartDate ? 'Please select SWP Start Date' :
+                  !endDate ? 'Please select End Date' :
+                    funds.length === 0 ? 'Please select at least one fund' :
+                      mode === 'TARGET' && (desiredWithdrawal <= 0 || isNaN(desiredWithdrawal)) ? 'Please enter desired withdrawal amount' :
+                        mode !== 'TARGET' && totalInvestment <= 0 ? 'Please enter total investment amount' :
+                          'Click to run simulation'
           }
         >
           {isLoading ? 'Simulating...' : 'Run SWP Simulation'}
-              </Button>
+        </Button>
       </Card>
 
       {/* Loading State */}
@@ -1264,7 +1312,7 @@ export function SWPCalculator({
           <Card className="p-4 sm:p-6 border border-slate-200 bg-white">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
               <div className="flex items-start gap-2">
-              <div>
+                <div>
                   <h3 className="text-lg font-semibold text-slate-900">
                     Safe withdrawal insights
                   </h3>
@@ -1287,23 +1335,23 @@ export function SWPCalculator({
               <Badge variant="outline" className="text-slate-600 border-slate-200">
                 Risk factor: {formatNumber(insights.riskFactor, 1)}
               </Badge>
-              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <div className="text-xs uppercase text-slate-500 font-semibold mb-1">
                   Portfolio CAGR
-                      </div>
+                </div>
                 <div className="text-xl font-semibold text-slate-900">
                   {insights.portfolioCAGR !== null
                     ? `${formatNumber(insights.portfolioCAGR, 2)}%`
                     : 'Not enough history'}
-                  </div>
+                </div>
               </div>
               <div>
                 <div className="text-xs uppercase text-slate-500 font-semibold mb-1">
                   Annualized volatility
-                  </div>
+                </div>
                 <div className="text-xl font-semibold text-slate-900">
                   {insights.portfolioVolatility !== null
                     ? `${formatNumber(insights.portfolioVolatility, 2)}%`
@@ -1326,18 +1374,18 @@ export function SWPCalculator({
                     : '—'}
                 </div>
               </div>
-              </div>
+            </div>
 
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs uppercase text-slate-500 font-semibold mb-1">
                   Safe withdrawal ({frequencyDescriptor}) (from corpus)
-                      </div>
+                </div>
                 <div className="text-xl font-semibold text-slate-900">
                   {insights.safeMonthlyWithdrawal !== null
                     ? formatCurrency(insights.safeMonthlyWithdrawal)
                     : 'Not enough history'}
-                  </div>
+                </div>
                 <p className="text-xs text-slate-500 mt-1">
                   Based on total investment of {formatCurrency(totalInvestment)} and withdrawals
                   taken {frequencyDescriptor}.
@@ -1347,35 +1395,35 @@ export function SWPCalculator({
               <Card className="border border-slate-200 bg-slate-50 p-4">
                 <div className="text-xs uppercase text-slate-500 font-semibold mb-1">
                   Corpus required for target withdrawal
-              </div>
+                </div>
                 <div className="flex flex-col gap-1 text-slate-900 font-semibold text-sm">
-                {mode === 'TARGET' ? (
-                  <>
-                    <span>
-                      Indefinite:{' '}
-                      {displayedRequiredCorpus !== null
-                        ? formatCurrency(displayedRequiredCorpus)
-                        : 'Run the simulation to calculate'}
+                  {mode === 'TARGET' ? (
+                    <>
+                      <span>
+                        Indefinite:{' '}
+                        {displayedRequiredCorpus !== null
+                          ? formatCurrency(displayedRequiredCorpus)
+                          : 'Run the simulation to calculate'}
+                      </span>
+                      <span>
+                        {durationYears > 0 ? (
+                          <>
+                            {durationYears} years:{' '}
+                            {displayedHorizonCorpus !== null
+                              ? formatCurrency(displayedHorizonCorpus)
+                              : 'Run the simulation to calculate'}
+                          </>
+                        ) : (
+                          'Provide a horizon to estimate finite-duration corpus.'
+                        )}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-slate-500 font-normal">
+                      Switch to &quot;I Have a Target Withdrawal&quot; to estimate the corpus needed for a desired income.
                     </span>
-                    <span>
-                      {durationYears > 0 ? (
-                        <>
-                          {durationYears} years:{' '}
-                          {displayedHorizonCorpus !== null
-                            ? formatCurrency(displayedHorizonCorpus)
-                            : 'Run the simulation to calculate'}
-                        </>
-                      ) : (
-                        'Provide a horizon to estimate finite-duration corpus.'
-                      )}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs text-slate-500 font-normal">
-                    Switch to &quot;I Have a Target Withdrawal&quot; to estimate the corpus needed for a desired income.
-                  </span>
-          )}
-        </div>
+                  )}
+                </div>
                 <p className="text-xs text-slate-500 mt-1">
                   Uses adjusted return of{' '}
                   {insights.adjustedReturnPercent !== null
@@ -1383,7 +1431,7 @@ export function SWPCalculator({
                     : 'Not enough history'}{' '}
                   (CAGR minus volatility).
                 </p>
-      </Card>
+              </Card>
             </div>
           </Card>
         </TooltipProvider>
@@ -1398,6 +1446,16 @@ export function SWPCalculator({
 
       {result && (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={handleDownloadReport}
+              className="flex items-center gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              <Download className="h-4 w-4" />
+              Download Report
+            </Button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-4 border-slate-200">
               <div className="text-xs uppercase text-slate-500 font-semibold mb-2">
@@ -1432,9 +1490,8 @@ export function SWPCalculator({
                 <div className="flex justify-between">
                   <span className="text-slate-600">Profit Remaining:</span>
                   <span
-                    className={`font-semibold ${
-                      result.finalProfitRemaining >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
+                    className={`font-semibold ${result.finalProfitRemaining >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}
                   >
                     {formatCurrency(result.finalProfitRemaining)}
                   </span>
@@ -1445,11 +1502,10 @@ export function SWPCalculator({
               <div>
                 <div className="text-xs uppercase text-slate-500 font-semibold mb-2">
                   XIRR (Money-weighted return)
-              </div>
+                </div>
                 <div
-                  className={`text-2xl font-bold ${
-                    (result.xirr ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
-                  } flex items-center gap-2`}
+                  className={`text-2xl font-bold ${(result.xirr ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                    } flex items-center gap-2`}
                 >
                   {(result.xirr ?? 0) >= 0 ? (
                     <TrendingUp className="h-5 w-5" />
@@ -1458,7 +1514,7 @@ export function SWPCalculator({
                   )}
                   {result.xirr !== null ? `${formatNumber(result.xirr, 2)}%` : '—'}
                 </div>
-                  </div>
+              </div>
             </Card>
             <Card className="p-4 border-slate-200">
               <div className="text-xs uppercase text-slate-500 font-semibold mb-2">
@@ -1471,7 +1527,7 @@ export function SWPCalculator({
                 {result.depletedOn
                   ? `Depleted on ${result.depletedOn}`
                   : 'Portfolio still active at end date'}
-                </div>
+              </div>
             </Card>
             <Card className="p-4 border-slate-200">
               <div className="text-xs uppercase text-slate-500 font-semibold mb-2">
@@ -1512,31 +1568,31 @@ export function SWPCalculator({
                   </SelectContent>
                 </Select>
                 <Badge variant="outline" className="bg-slate-50 text-slate-700">
-                {result.chartData.length} data points
-              </Badge>
-            </div>
+                  {result.chartData.length} data points
+                </Badge>
+              </div>
             </div>
             <div className="w-full h-[320px]">
               <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={result.chartData}>
+                <LineChart data={result.chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 12 }}
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
                     tickFormatter={(value: string) =>
                       new Date(value).toLocaleDateString('en-IN', {
                         month: 'short',
                         year: 'numeric',
                       })
                     }
-                />
-                <YAxis
-                  tick={{ fontSize: 12 }}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
                     tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                />
-                <Tooltip
-                  formatter={(value: number, name: string) => [
-                    formatCurrency(value),
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      formatCurrency(value),
                       name,
                     ]}
                     labelFormatter={(label) =>
@@ -1549,64 +1605,64 @@ export function SWPCalculator({
                     }
                   />
                   <RechartsLegend iconType="circle" />
-                <Line
-                  type="monotone"
-                  dataKey="invested"
+                  <Line
+                    type="monotone"
+                    dataKey="invested"
                     name="Invested capital"
-                  stroke="#94a3b8"
+                    stroke="#94a3b8"
                     strokeDasharray="6 4"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                {selectedFundView === 'bucket' ? (
-                  <>
-                <Line
-                  type="monotone"
-                      dataKey="portfolioValue"
-                      name="Portfolio value"
-                  stroke="#1f2937"
-                  strokeWidth={3}
-                  dot={false}
-                />
-                    <Line
-                      type="monotone"
-                      dataKey="withdrawn"
-                      name="Cumulative withdrawals"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </>
-                ) : (
-                  <>
-                    {result.fundSummaries
-                      .filter((fund) => fund.fundId === selectedFundView)
-                      .map((fund) => {
-                        const fundIndex = funds.findIndex((f) => f.id === fund.fundId);
-                        const colors = ['#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#ef4444'];
-                  return (
-                    <Line
-                      key={fund.fundId}
-                      type="monotone"
-                      dataKey={fund.fundName}
-                            name={`${fund.fundName} value`}
-                            stroke={colors[fundIndex % colors.length]}
-                            strokeWidth={3}
-                      dot={false}
-                    />
-                  );
-                })}
-                    <Line
-                      type="monotone"
-                      dataKey="withdrawn"
-                      name="Cumulative withdrawals"
-                      stroke="#2563eb"
-                      strokeWidth={2}
-                      dot={false}
-                    />
-                  </>
-                )}
-              </LineChart>
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  {selectedFundView === 'bucket' ? (
+                    <>
+                      <Line
+                        type="monotone"
+                        dataKey="portfolioValue"
+                        name="Portfolio value"
+                        stroke="#1f2937"
+                        strokeWidth={3}
+                        dot={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="withdrawn"
+                        name="Cumulative withdrawals"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      {result.fundSummaries
+                        .filter((fund) => fund.fundId === selectedFundView)
+                        .map((fund) => {
+                          const fundIndex = funds.findIndex((f) => f.id === fund.fundId);
+                          const colors = ['#0ea5e9', '#22c55e', '#f97316', '#a855f7', '#ef4444'];
+                          return (
+                            <Line
+                              key={fund.fundId}
+                              type="monotone"
+                              dataKey={fund.fundName}
+                              name={`${fund.fundName} value`}
+                              stroke={colors[fundIndex % colors.length]}
+                              strokeWidth={3}
+                              dot={false}
+                            />
+                          );
+                        })}
+                      <Line
+                        type="monotone"
+                        dataKey="withdrawn"
+                        name="Cumulative withdrawals"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </>
+                  )}
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </Card>
@@ -1629,15 +1685,15 @@ export function SWPCalculator({
               </TableHeader>
               <TableBody>
                 {result.fundSummaries.map((fund) => (
-                    <TableRow key={fund.fundId}>
+                  <TableRow key={fund.fundId}>
                     <TableCell className="font-medium">{fund.fundName}</TableCell>
                     <TableCell>{fund.weightage}%</TableCell>
                     <TableCell>₹{formatNumber(fund.navAtPurchase, 2)}</TableCell>
                     <TableCell>{formatNumber(fund.unitsPurchased, 4)}</TableCell>
                     <TableCell>{formatNumber(fund.remainingUnits, 4)}</TableCell>
-                      <TableCell>{formatCurrency(fund.totalWithdrawn)}</TableCell>
-                      <TableCell>{formatCurrency(fund.currentValue)}</TableCell>
-                    </TableRow>
+                    <TableCell>{formatCurrency(fund.totalWithdrawn)}</TableCell>
+                    <TableCell>{formatCurrency(fund.currentValue)}</TableCell>
+                  </TableRow>
                 ))}
               </TableBody>
             </Table>
@@ -1652,7 +1708,7 @@ export function SWPCalculator({
             >
               {showTable ? 'Hide table' : 'Show table'}
             </Button>
-            </div>
+          </div>
 
           {showTable && (
             <Card className="p-4 sm:p-6 border-slate-200 overflow-x-auto">
@@ -1690,7 +1746,7 @@ export function SWPCalculator({
                           groupIndex++;
                         }
                       });
-                      
+
                       const bgColors = [
                         'bg-white',
                         'bg-blue-50',
@@ -1705,14 +1761,14 @@ export function SWPCalculator({
                         'hover:bg-purple-100',
                         'hover:bg-yellow-100',
                       ];
-                      
+
                       return result.tableRows.map((row, index) => {
                         const groupColorIndex = dateGroups[row.date] ?? 0;
                         const bgColor = bgColors[groupColorIndex % bgColors.length];
                         const hoverColor = hoverColors[groupColorIndex % hoverColors.length];
-                        
+
                         return (
-                          <TableRow 
+                          <TableRow
                             key={`${row.date}-${row.fundId}-${index}`}
                             className={`${bgColor} ${hoverColor}`}
                           >
@@ -1736,7 +1792,7 @@ export function SWPCalculator({
                   </TableBody>
                 </Table>
               )}
-    </Card>
+            </Card>
           )}
         </div>
       )}

@@ -3,7 +3,7 @@ const BucketLiveReturns = require('../models/BucketLiveReturns');
 const SuggestedBucket = require('../models/SuggestedBucket');
 const { getHistoricalNav } = require('./navApi.service');
 const logger = require('../utils/logger');
-const { calculateXIRR } = require('../logic/financialCalculations');
+const { calculateXIRR, calculateRollingReturns } = require('../logic/financialCalculations');
 
 /**
  * Calculate live returns for a bucket
@@ -26,8 +26,8 @@ async function calculateBucketLiveReturns(bucket) {
       const launchDate = new Date(fund.launchDate);
       return launchDate < earliest ? launchDate : earliest;
     }, new Date(fiveYearsAgoStr));
-    const fetchStartDate = earliestLaunchDate < new Date(fiveYearsAgoStr) 
-      ? earliestLaunchDate.toISOString().split('T')[0] 
+    const fetchStartDate = earliestLaunchDate < new Date(fiveYearsAgoStr)
+      ? earliestLaunchDate.toISOString().split('T')[0]
       : fiveYearsAgoStr;
 
     // Fetch NAV data
@@ -94,8 +94,8 @@ async function calculateBucketLiveReturns(bucket) {
       const nav3YDate = new Date(threeYearsAgoStr);
       const nav3YEntry = navData.find(nav => new Date(nav.date) >= nav3YDate) || navData[0];
       const cagr3Y = nav3YEntry && currentNavEntry && nav3YEntry.nav > 0
-        ? calculateCAGR(nav3YEntry.nav, currentNavEntry.nav, 
-            (new Date(currentNavEntry.date) - new Date(nav3YEntry.date)) / (1000 * 60 * 60 * 24))
+        ? calculateCAGR(nav3YEntry.nav, currentNavEntry.nav,
+          (new Date(currentNavEntry.date) - new Date(nav3YEntry.date)) / (1000 * 60 * 60 * 24))
         : null;
 
       // Calculate 5-year CAGR
@@ -103,7 +103,7 @@ async function calculateBucketLiveReturns(bucket) {
       const nav5YEntry = navData.find(nav => new Date(nav.date) >= nav5YDate) || navData[0];
       const cagr5Y = nav5YEntry && currentNavEntry && nav5YEntry.nav > 0
         ? calculateCAGR(nav5YEntry.nav, currentNavEntry.nav,
-            (new Date(currentNavEntry.date) - new Date(nav5YEntry.date)) / (1000 * 60 * 60 * 24))
+          (new Date(currentNavEntry.date) - new Date(nav5YEntry.date)) / (1000 * 60 * 60 * 24))
         : null;
 
       // Calculate positive periods from launch (simplified - can be enhanced)
@@ -131,16 +131,16 @@ async function calculateBucketLiveReturns(bucket) {
       let totalSIPUnits = 0;
       const fundSipCashFlows = [];
 
-      const threeYearsAgoDate = new Date(threeYearsAgoStr);
-      const firstDayOfMonth = new Date(threeYearsAgoDate.getFullYear(), threeYearsAgoDate.getMonth(), 1);
-      
+      const threeYearsAgoDateObj = new Date(threeYearsAgoStr);
+      const firstDayOfMonth = new Date(threeYearsAgoDateObj.getFullYear(), threeYearsAgoDateObj.getMonth(), 1);
+
       for (let month = 0; month < 36; month++) {
         const sipDate = new Date(firstDayOfMonth);
         sipDate.setMonth(sipDate.getMonth() + month);
         const sipDateStr = sipDate.toISOString().split('T')[0];
-        
+
         const navEntry = navData.find(nav => new Date(nav.date) >= new Date(sipDateStr)) || navData[navData.length - 1];
-        
+
         if (navEntry && navEntry.nav > 0) {
           const unitsPurchased = fundSIPMonthly / navEntry.nav;
           totalSIPUnits += unitsPurchased;
@@ -180,7 +180,7 @@ async function calculateBucketLiveReturns(bucket) {
         sipTotalInvested,
         sipCurrentValue,
         sipXIRR,
-        positivePercentageFromLaunch,
+        positivePercentageFromLaunch: positivePercentageFromLaunch,
       });
     }
 
@@ -225,7 +225,8 @@ async function calculateBucketLiveReturns(bucket) {
       sipCurrentValue: totalSIPValue > 0 ? totalSIPValue : null,
       sipXIRR: bucketSipXIRR,
       sipProfitPercentage,
-      fundLiveReturns: fundMetrics
+      fundLiveReturns: fundMetrics,
+      _navDataMap: navDataMap // Internal: Return raw NAV data for rolling return calculation
     };
   } catch (error) {
     logger.error('Error calculating bucket live returns:', error);
@@ -248,7 +249,7 @@ function calculateCAGR(startValue, endValue, days) {
 function calculateWeightedAverage(values, weights) {
   let weightedSum = 0;
   let totalWeight = 0;
-  
+
   for (const [key, value] of Object.entries(values)) {
     if (value !== null && value !== undefined && !isNaN(value)) {
       const weight = weights[key] || 0;
@@ -256,8 +257,169 @@ function calculateWeightedAverage(values, weights) {
       totalWeight += weight;
     }
   }
-  
+
   return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
+/**
+ * Calculate bucket rolling stats and return performance object structure
+ */
+function calculateBucketRollingStats(bucket, navDataMap) {
+  try {
+    const windowDays = 1095; // 3 Years
+    const fundPerformance = [];
+
+    // 1. Calculate rolling returns for each fund
+    for (const fund of bucket.funds) {
+      const navData = navDataMap[fund.id] || [];
+      if (navData.length === 0) continue;
+
+      // Sort ensure sorted
+      navData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const rollingStats = calculateRollingReturns(navData, windowDays);
+
+      if (rollingStats && rollingStats.statistics) {
+        fundPerformance.push({
+          fundId: fund.id,
+          fundName: fund.name,
+          ...rollingStats.statistics,
+          positivePercentage: rollingStats.statistics.positivePeriods,
+          stdDev: rollingStats.statistics.std
+        });
+      }
+    }
+
+    // 2. Calculate rolling returns for the bucket (Weighted Portfolio)
+    // We need to construct a virtual bucket NAV series or daily returns series
+    // Method: Bucket Total Return = Sum (Weight_i * Fund Total Return_i)
+    // Actually, accurate method for rolling "CAGR" of a rebalanced portfolio:
+    // For each start date T:
+    // Bucket_Return_Factor(T, T+3Y) = Sum ( Weight_i * (NAV_i(T+3Y) / NAV_i(T)) )
+    // Bucket_CAGR(T) = (Bucket_Return_Factor ^ (1/3)) - 1
+
+    const rollingReturnsSeries = [];
+    const dates = [];
+
+    // Find common date range
+    // Start iterating from earliest possible date where all funds have data?
+    // Or just iterate based on one fund and use available data?
+    // Assuming we want dates where ALL funds are available for accurate portfolio stats.
+
+    let commonDates = null;
+    for (const fundId in navDataMap) {
+      const fundDates = navDataMap[fundId].map(d => d.date);
+      if (commonDates === null) {
+        commonDates = new Set(fundDates);
+      } else {
+        // Intersection
+        const currentFundDates = new Set(fundDates);
+        commonDates = new Set([...commonDates].filter(d => currentFundDates.has(d)));
+      }
+    }
+
+    if (!commonDates || commonDates.size === 0) {
+      return null;
+    }
+
+    const sortedDates = Array.from(commonDates).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+    // We can only calculate rolling return if we have T and T+3Y
+    // 3 Years ~ 1095 days
+    // Iterating is tricky because dates might have gaps (weekends).
+    // Better to iterate through sortedDates and find date closest to T + 3Y.
+
+    for (let i = 0; i < sortedDates.length; i++) {
+      const startDate = new Date(sortedDates[i]);
+      const targetEndDate = new Date(startDate);
+      targetEndDate.setDate(targetEndDate.getDate() + windowDays); // Target date
+
+      // Look for a date in sortedDates that is close to targetEndDate
+      // Since sortedDates is sorted, we can search forward
+      // We allow a small margin (e.g., +/- 7 days) match
+
+      const targetTime = targetEndDate.getTime();
+      let bestMatchDate = null;
+      let minDiff = 7 * 24 * 60 * 60 * 1000; // 7 days max diff
+
+      // Optimization: start search from i + windowDays (approx) if continuous?
+      // Just search from i explicitly
+      // Better: binary search or just find. Since dates are about 250 per year...
+
+      // Filter for dates >= targetEndDate - margin
+      const startSearchIdx = i + 1; // Can assume at least i
+
+      for (let j = startSearchIdx; j < sortedDates.length; j++) {
+        const d = new Date(sortedDates[j]).getTime();
+        const diff = Math.abs(d - targetTime);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestMatchDate = sortedDates[j];
+        }
+        if (d > targetTime + minDiff) break; // Passed the window
+      }
+
+      if (bestMatchDate) {
+        // Calculate Bucket Return Factor
+        let bucketReturnFactor = 0;
+        let totalWeight = 0;
+
+        for (const fund of bucket.funds) {
+          const navData = navDataMap[fund.id];
+          const startNav = navData.find(n => n.date === sortedDates[i]);
+          const endNav = navData.find(n => n.date === bestMatchDate);
+
+          if (startNav && endNav && startNav.nav > 0) {
+            const weight = fund.weightage / 100;
+            bucketReturnFactor += weight * (endNav.nav / startNav.nav);
+            totalWeight += weight;
+          }
+        }
+
+        if (totalWeight > 0.99) { // Ensure we have ~100% coverage
+          const years = windowDays / 365.25; // Approx 3 years
+          // CAGR = (Factor ^ (1/n)) - 1
+          const cagr = (Math.pow(bucketReturnFactor, 1 / years) - 1) * 100;
+          rollingReturnsSeries.push(cagr);
+          dates.push(bestMatchDate);
+        }
+      }
+    }
+
+    if (rollingReturnsSeries.length === 0) return null;
+
+    // Calculate stats
+    const mean = rollingReturnsSeries.reduce((a, b) => a + b, 0) / rollingReturnsSeries.length;
+    const sorted = [...rollingReturnsSeries].sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const min = sorted[0];
+    const max = sorted[sorted.length - 1];
+    const variance = rollingReturnsSeries.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / rollingReturnsSeries.length;
+    const stdDev = Math.sqrt(variance);
+    const positivePeriods = (rollingReturnsSeries.filter(r => r > 0).length / rollingReturnsSeries.length) * 100;
+
+    return {
+      rollingReturns: {
+        bucket: {
+          mean,
+          median,
+          max,
+          min,
+          stdDev,
+          positivePercentage: positivePeriods
+        },
+        funds: fundPerformance
+      },
+      analysisStartDate: sortedDates[0],
+      analysisEndDate: dates[dates.length - 1], // The last date we calculated a return FOR
+      totalPeriods: rollingReturnsSeries.length,
+      riskLevel: bucket.riskLevel // Persist existing risk level
+    };
+
+  } catch (error) {
+    logger.error('Error calculating bucket rolling stats:', error);
+    return null;
+  }
 }
 
 /**
@@ -287,6 +449,9 @@ async function getBucketLiveReturns(bucketId) {
     }
 
     const liveReturns = await calculateBucketLiveReturns(bucket);
+
+    // Clean internal data
+    delete liveReturns._navDataMap;
 
     // Save to database
     const saved = await BucketLiveReturns.findOneAndUpdate(
@@ -321,8 +486,12 @@ async function recalculateBucketLiveReturns(bucketId) {
     }
 
     const liveReturns = await calculateBucketLiveReturns(bucket);
+    const navDataMap = liveReturns._navDataMap;
+    delete liveReturns._navDataMap;
+
     const today = new Date().toISOString().split('T')[0];
 
+    // Save live returns
     const saved = await BucketLiveReturns.findOneAndUpdate(
       { bucketId },
       {
@@ -333,10 +502,20 @@ async function recalculateBucketLiveReturns(bucketId) {
       { upsert: true, new: true }
     ).lean();
 
-    // Update bucket's lastCalculationDate
-    await SuggestedBucket.findByIdAndUpdate(bucketId, {
+    // Calculate and update Detailed Rolling Returns Stats in SuggestedBucket
+    const rollingStats = calculateBucketRollingStats(bucket, navDataMap);
+
+    const updateData = {
       lastCalculationDate: new Date()
-    });
+    };
+
+    if (rollingStats) {
+      updateData.performance = rollingStats;
+      logger.info(`Updated rolling returns stats for bucket: ${bucket.name}`);
+    }
+
+    // Update suggested bucket
+    await SuggestedBucket.findByIdAndUpdate(bucketId, updateData);
 
     return {
       ...saved,
@@ -376,7 +555,7 @@ async function recalculateAllBuckets() {
         });
         logger.error(`Failed to recalculate bucket ${bucket.name}:`, error.message);
       }
-      
+
       // Small delay to avoid overwhelming the API
       await new Promise(resolve => setTimeout(resolve, 1000));
     }

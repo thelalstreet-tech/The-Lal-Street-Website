@@ -31,7 +31,7 @@ const calculateXIRREnhanced = (cashflows) => {
     // Ensure we have both positive and negative cashflows
     const hasPositive = cashflows.some(cf => cf.amount > 0);
     const hasNegative = cashflows.some(cf => cf.amount < 0);
-    
+
     if (!hasPositive || !hasNegative) {
       console.log('[XIRR] Need both positive and negative cashflows');
       return null;
@@ -39,15 +39,15 @@ const calculateXIRREnhanced = (cashflows) => {
 
     // Sort cashflows by date
     const sortedCashflows = [...cashflows].sort((a, b) => new Date(a.date) - new Date(b.date));
-    
+
     // The library expects amounts and dates in separate arrays.
     const transactions = sortedCashflows.map(cf => ({
       amount: cf.amount,
       when: new Date(cf.date), // Ensure it's a proper Date object
     }));
-    
+
     console.log('[XIRR] Calculating with transactions:', transactions.length);
-    
+
     // The xirr library may return either a number (rate) or an object { rate }
     const result = xirr(transactions);
 
@@ -93,10 +93,13 @@ const calculateRollingReturns = (navData, windowDays) => {
     dates.push(navData[i + windowDays].date);
   }
 
+  const mean = rollingReturns.reduce((a, b) => a + b, 0) / rollingReturns.length;
+  const sortedReturns = [...rollingReturns].sort((a, b) => a - b);
+
   const stats = {
-    mean: rollingReturns.reduce((a, b) => a + b, 0) / rollingReturns.length,
-    median: rollingReturns.sort((a, b) => a - b)[Math.floor(rollingReturns.length / 2)],
-    std: Math.sqrt(rollingReturns.reduce((sq, n) => sq + Math.pow(n - stats.mean, 2), 0) / rollingReturns.length),
+    mean: mean,
+    median: sortedReturns[Math.floor(sortedReturns.length / 2)],
+    std: Math.sqrt(rollingReturns.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / rollingReturns.length),
     min: Math.min(...rollingReturns),
     max: Math.max(...rollingReturns),
     positivePeriods: (rollingReturns.filter(r => r > 0).length / rollingReturns.length) * 100
@@ -115,7 +118,7 @@ const calculateRollingReturns = (navData, windowDays) => {
  */
 const calculateVolatility = (returns) => {
   if (returns.length < 2) return 0;
-  
+
   const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
   const variance = returns.reduce((sq, n) => sq + Math.pow(n - mean, 2), 0) / (returns.length - 1);
   return Math.sqrt(variance) * Math.sqrt(12); // Annualized monthly volatility
@@ -179,7 +182,7 @@ const calculateXIRR = (cashflows) => {
     // Ensure we have both positive and negative cashflows
     const hasPositive = cashflows.some(cf => cf.amount > 0);
     const hasNegative = cashflows.some(cf => cf.amount < 0);
-    
+
     if (!hasPositive || !hasNegative) {
       console.log('[XIRR] Need both positive and negative cashflows');
       return null;
@@ -187,18 +190,18 @@ const calculateXIRR = (cashflows) => {
 
     // Sort cashflows by date
     const sortedCashflows = [...cashflows].sort((a, b) => new Date(a.date) - new Date(b.date));
-    
+
     // The library expects amounts and dates in separate arrays.
     const transactions = sortedCashflows.map(cf => ({
       amount: cf.amount,
       when: new Date(cf.date), // Ensure it's a proper Date object
     }));
-    
+
     console.log('[XIRR] Calculating with transactions:', transactions.length);
-    
+
     // The result from the library is a rate (e.g., 0.12), so we multiply by 100.
     const result = xirr(transactions);
-    
+
     if (result && typeof result.rate === 'number' && !isNaN(result.rate)) {
       return result.rate * 100;
     } else {

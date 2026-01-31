@@ -6,13 +6,16 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend as RechartsLegend, ResponsiveContainer } from 'recharts';
-import { TrendingUp, TrendingDown, Plus, Minus, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, Minus, Loader2, Download } from 'lucide-react';
 import type { SelectedFund } from '../../App';
 import { fetchNAVData } from '../../services/navService';
-import { SimpleRollingReturnCard } from '../SimpleRollingReturnCard';
+import { RollingReturnsAnalysis } from '../RollingReturnsAnalysis';
+import { BucketPerformanceMetrics } from '../../utils/bucketPerformanceCalculator';
 import { calculateXIRR, calculateCAGR } from '../../utils/financialCalculations';
 import { getNextAvailableNAV, getLatestNAVBeforeDate, getYearsBetween, addMonths, getToday } from '../../utils/dateUtils';
 import { logger } from '../../utils/logger';
+import { generateSIPLumpsumReport } from '../../utils/pdfGenerator';
+import { calculateBucketPerformance } from '../../utils/bucketPerformanceCalculator';
 
 interface SIPLumpsumCalculatorProps {
   funds: SelectedFund[];
@@ -63,33 +66,40 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
   const [startDate, setStartDate] = useState<string>('2020-01-01');
   const [endDate, setEndDate] = useState<string>(getToday());
   const [minAvailableDate, setMinAvailableDate] = useState<string | null>(null);
-  
+
   // Lumpsum specific state
   const [hasLumpsum, setHasLumpsum] = useState<boolean>(false);
   const [lumpsumAmount, setLumpsumAmount] = useState<number>(20000);
   const [lumpsumDate, setLumpsumDate] = useState<string>('');
   const [lumpsumMode, setLumpsumMode] = useState<'weightage' | 'specific'>('weightage');
   const [selectedFundForLumpsum, setSelectedFundForLumpsum] = useState<string>('');
-  
+
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [rollingReturnsMetrics, setRollingReturnsMetrics] = useState<BucketPerformanceMetrics | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset results on input change
+  useEffect(() => {
+    setResult(null);
+  }, [funds, monthlyInvestment, startDate, endDate, hasLumpsum, lumpsumAmount, lumpsumDate, lumpsumMode, selectedFundForLumpsum]);
 
   useEffect(() => {
     if (funds.length > 0) {
       const launchDates = funds
         .map(f => new Date(f.launchDate))
         .filter(date => !isNaN(date.getTime()));
-      
+
       if (launchDates.length > 0) {
         const latestLaunchDate = new Date(Math.max(...launchDates.map(d => d.getTime())));
         const formattedDate = latestLaunchDate.toISOString().split('T')[0];
         setMinAvailableDate(formattedDate);
-        
+
         if (new Date(startDate) < latestLaunchDate) {
           setStartDate(formattedDate);
         }
-        
+
         // Set default lumpsum date to midpoint if not set
         if (!lumpsumDate && startDate && endDate) {
           const start = new Date(startDate);
@@ -98,7 +108,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
           setLumpsumDate(midpoint.toISOString().split('T')[0]);
         }
       }
-      
+
       // Set default fund for lumpsum
       if (!selectedFundForLumpsum && funds.length > 0) {
         setSelectedFundForLumpsum(funds[0].id);
@@ -113,7 +123,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
     if (isLoading) {
       return;
     }
-    
+
     setIsLoading(true);
     setError(null);
     setResult(null);
@@ -124,7 +134,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
         const lumpDate = new Date(lumpsumDate);
         const start = new Date(startDate);
         const end = new Date(endDate);
-        
+
         if (lumpDate < start || lumpDate > end) {
           throw new Error("Lumpsum date must be between SIP start and end dates");
         }
@@ -133,7 +143,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       const fundSchemeCodes = funds.map(f => f.id);
       logger.log('Fetching NAV data for funds:', fundSchemeCodes);
       logger.log('Date range:', startDate, 'to', endDate);
-      
+
       const navResponses = await fetchNAVData(fundSchemeCodes, startDate, endDate);
       logger.log('NAV Responses received:', navResponses);
 
@@ -142,7 +152,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       }
 
       // Generate SIP dates
-      const actualSIPDates: Array<{plannedDate: string, actualDate: string}> = [];
+      const actualSIPDates: Array<{ plannedDate: string, actualDate: string }> = [];
       let currentPlannedDate = startDate;
       const end = new Date(endDate);
 
@@ -150,7 +160,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       while (true) {
         loopCount++;
         const plannedDateObj = new Date(currentPlannedDate);
-        
+
         const daysFromEnd = Math.ceil((plannedDateObj.getTime() - end.getTime()) / (1000 * 60 * 60 * 24));
         if (plannedDateObj.getTime() > end.getTime() + (32 * 24 * 60 * 60 * 1000)) {
           logger.log(`[SIP Loop] STOPPED - Planned date too far: ${currentPlannedDate} (${daysFromEnd} days from end)`);
@@ -159,50 +169,50 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
 
         const firstFundNav = navResponses[0];
         let navEntry = getNextAvailableNAV(firstFundNav.navData, currentPlannedDate);
-        
+
         if (!navEntry) {
           const plannedYear = plannedDateObj.getFullYear();
           const plannedMonth = plannedDateObj.getMonth();
           const endYear = end.getFullYear();
           const endMonth = end.getMonth();
-          
+
           if (plannedYear === endYear && plannedMonth === endMonth) {
             const firstDayOfMonth = `${endYear}-${String(endMonth + 1).padStart(2, '0')}-01`;
             navEntry = getNextAvailableNAV(firstFundNav.navData, firstDayOfMonth);
           }
         }
-        
+
         if (navEntry) {
           const actualInvestmentDate = new Date(navEntry.date);
           const daysDiff = Math.ceil((actualInvestmentDate.getTime() - end.getTime()) / (1000 * 60 * 60 * 24));
-          
+
           const plannedYear = plannedDateObj.getFullYear();
           const plannedMonth = plannedDateObj.getMonth();
           const endYear = end.getFullYear();
           const endMonth = end.getMonth();
-          
-          const isPlannedBeforeOrSameMonth = 
-            (plannedYear < endYear) || 
+
+          const isPlannedBeforeOrSameMonth =
+            (plannedYear < endYear) ||
             (plannedYear === endYear && plannedMonth <= endMonth);
-          
-          const shouldInclude = 
-            isPlannedBeforeOrSameMonth || 
+
+          const shouldInclude =
+            isPlannedBeforeOrSameMonth ||
             (daysDiff >= 0 && daysDiff <= 7);
-          
+
           if (shouldInclude) {
             actualSIPDates.push({
               plannedDate: currentPlannedDate,
               actualDate: navEntry.date
             });
-            
+
             const actualDateObj = new Date(navEntry.date);
             const actualYear = actualDateObj.getFullYear();
             const actualMonth = actualDateObj.getMonth();
-            
+
             if (actualYear === endYear && actualMonth === endMonth) {
               break;
             }
-            
+
             currentPlannedDate = addMonths(currentPlannedDate, 1);
           } else {
             break;
@@ -213,7 +223,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       }
 
       logger.log('SIP Dates generated:', actualSIPDates.length, 'months');
-      
+
       const totalSIPInvested = monthlyInvestment * actualSIPDates.length;
       const totalLumpsumInvested = hasLumpsum ? lumpsumAmount : 0;
       const totalInvested = totalSIPInvested + totalLumpsumInvested;
@@ -221,11 +231,11 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       // Calculate for each fund
       const fundResults = funds.map(fund => {
         const navData = navResponses.find(nav => nav.schemeCode === fund.id);
-        
+
         if (!navData) {
           throw new Error(`No NAV data found for fund: ${fund.name} (${fund.id})`);
         }
-        
+
         if (navData.navData.length === 0) {
           throw new Error(`NAV data is empty for fund: ${fund.name}.`);
         }
@@ -245,13 +255,13 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
         // Process SIP investments
         actualSIPDates.forEach(({ plannedDate, actualDate }) => {
           const navEntry = getNextAvailableNAV(navData.navData, plannedDate);
-          
+
           if (navEntry && navEntry.nav > 0) {
             const monthlyAmount = monthlyInvestment * (fund.weightage / 100);
             const unitsPurchased = monthlyAmount / navEntry.nav;
             totalUnits += unitsPurchased;
             sipInvested += monthlyAmount;
-            
+
             investmentData.push({
               date: navEntry.date,
               invested: sipInvested + lumpsumInvested,
@@ -266,10 +276,10 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
         // Process Lumpsum investment
         if (hasLumpsum) {
           const navEntry = getNextAvailableNAV(navData.navData, lumpsumDate);
-          
+
           if (navEntry && navEntry.nav > 0) {
             let lumpsumForThisFund = 0;
-            
+
             if (lumpsumMode === 'weightage') {
               // Distribute by weightage
               lumpsumForThisFund = lumpsumAmount * (fund.weightage / 100);
@@ -277,12 +287,12 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
               // Invest entirely in selected fund
               lumpsumForThisFund = lumpsumAmount;
             }
-            
+
             if (lumpsumForThisFund > 0) {
               const unitsPurchased = lumpsumForThisFund / navEntry.nav;
               totalUnits += unitsPurchased;
               lumpsumInvested = lumpsumForThisFund;
-              
+
               // Update or add investment record for lumpsum date
               const existingIndex = investmentData.findIndex(d => d.date === navEntry.date);
               if (existingIndex >= 0) {
@@ -311,10 +321,10 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
         const currentValue = totalUnits * (finalNavEntry?.nav || 0);
         const profit = currentValue - fundInvested;
         const profitPercentage = fundInvested > 0 ? (profit / fundInvested) * 100 : 0;
-        
+
         const years = getYearsBetween(startDate, endDate);
         const cagr = calculateCAGR(fundInvested, currentValue, years);
-        
+
         // Calculate XIRR for individual fund
         const fundCashFlows = [
           ...actualSIPDates.map(({ actualDate }) => ({
@@ -322,7 +332,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
             amount: -(monthlyInvestment * (fund.weightage / 100))
           })),
         ];
-        
+
         // Add lumpsum cashflow if applicable
         if (hasLumpsum) {
           const navEntry = getNextAvailableNAV(navData.navData, lumpsumDate);
@@ -333,7 +343,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
             } else if (lumpsumMode === 'specific' && fund.id === selectedFundForLumpsum) {
               lumpsumForThisFund = lumpsumAmount;
             }
-            
+
             if (lumpsumForThisFund > 0) {
               fundCashFlows.push({
                 date: new Date(navEntry.date),
@@ -342,15 +352,15 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
             }
           }
         }
-        
+
         fundCashFlows.push({
           date: new Date(endDate),
           amount: currentValue
         });
-        
+
         // Sort cashflows by date
         fundCashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
-        
+
         const fundXIRR = calculateXIRR(fundCashFlows);
 
         return {
@@ -375,7 +385,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       const portfolioValue = fundResults.reduce((sum, fund) => sum + fund.currentValue, 0);
       const portfolioProfit = portfolioValue - portfolioInvested;
       const portfolioProfitPercentage = portfolioInvested > 0 ? (portfolioProfit / portfolioInvested) * 100 : 0;
-      
+
       const years = getYearsBetween(startDate, endDate);
       const portfolioCAGR = calculateCAGR(portfolioInvested, portfolioValue, years);
 
@@ -386,7 +396,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
           amount: -monthlyInvestment
         })),
       ];
-      
+
       // Add lumpsum cashflow
       if (hasLumpsum) {
         const firstFundNav = navResponses[0];
@@ -398,20 +408,20 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
           });
         }
       }
-      
+
       cashFlows.push({
         date: new Date(endDate),
         amount: portfolioValue
       });
-      
+
       // Sort cashflows by date
       cashFlows.sort((a, b) => a.date.getTime() - b.date.getTime());
-      
+
       const xirr = calculateXIRR(cashFlows);
 
       // Generate chart data
-      const fundUnitTracking = new Map<string, Array<{date: string, units: number, invested: number, nav: number}>>();
-      
+      const fundUnitTracking = new Map<string, Array<{ date: string, units: number, invested: number, nav: number }>>();
+
       funds.forEach(fund => {
         fundUnitTracking.set(fund.id, []);
       });
@@ -422,19 +432,19 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
           const navData = navResponses.find(nav => nav.schemeCode === fund.id);
           if (navData) {
             let navEntry = getNextAvailableNAV(navData.navData, plannedDate);
-            
+
             if (!navEntry) {
               navEntry = getNextAvailableNAV(navData.navData, actualDate);
             }
-            
+
             if (navEntry) {
               const fundMonthlyAmount = monthlyInvestment * (fund.weightage / 100);
               const unitsPurchased = fundMonthlyAmount / navEntry.nav;
-              
+
               const prevData = fundUnitTracking.get(fund.id)!;
               const prevUnits = prevData.length > 0 ? prevData[prevData.length - 1].units : 0;
               const prevInvested = prevData.length > 0 ? prevData[prevData.length - 1].invested : 0;
-              
+
               prevData.push({
                 date: actualDate,
                 units: prevUnits + unitsPurchased,
@@ -459,15 +469,15 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
               } else if (lumpsumMode === 'specific' && fund.id === selectedFundForLumpsum) {
                 lumpsumForThisFund = lumpsumAmount;
               }
-              
+
               if (lumpsumForThisFund > 0) {
                 const unitsPurchased = lumpsumForThisFund / navEntry.nav;
                 const trackingData = fundUnitTracking.get(fund.id)!;
-                
+
                 // Find the appropriate place to insert or update
                 const lumpsumDateObj = new Date(navEntry.date);
                 let insertIndex = trackingData.findIndex(d => new Date(d.date) >= lumpsumDateObj);
-                
+
                 if (insertIndex === -1) {
                   // Add at the end
                   const prevData = trackingData[trackingData.length - 1] || { units: 0, invested: 0 };
@@ -490,7 +500,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
                     invested: prevData.invested + lumpsumForThisFund,
                     nav: navEntry.nav
                   });
-                  
+
                   // Update all subsequent entries
                   for (let i = insertIndex + 1; i < trackingData.length; i++) {
                     trackingData[i].units += unitsPurchased;
@@ -507,13 +517,13 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
       const chartData = actualSIPDates.map(({ actualDate }, index) => {
         const monthNumber = index + 1;
         const cumulativeSIPInvested = monthlyInvestment * monthNumber;
-        
+
         // Add lumpsum if it's before or on this date
         let cumulativeInvested = cumulativeSIPInvested;
         if (hasLumpsum && new Date(lumpsumDate) <= new Date(actualDate)) {
           cumulativeInvested += lumpsumAmount;
         }
-        
+
         const dateObj = new Date(actualDate);
         const dataPoint: any = {
           date: dateObj.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' }),
@@ -525,11 +535,11 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
 
         funds.forEach(fund => {
           const unitData = fundUnitTracking.get(fund.id);
-          
+
           if (unitData && unitData[index]) {
             const currentNav = unitData[index].nav;
             const fundValue = unitData[index].units * currentNav;
-            
+
             dataPoint[fund.name] = fundValue;
             bucketValue += fundValue;
           }
@@ -574,13 +584,52 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
     }
   };
 
+  const handleDownloadReport = async () => {
+    if (!result) return;
+    setIsDownloading(true);
+    try {
+      let rollingReturns = rollingReturnsMetrics;
+      if (!rollingReturns) {
+        rollingReturns = await calculateBucketPerformance(funds);
+      }
+
+      generateSIPLumpsumReport({
+        ...result,
+        inputs: {
+          monthlyInvestment,
+          lumpsumAmount: hasLumpsum ? lumpsumAmount : undefined,
+          lumpsumDate: hasLumpsum ? lumpsumDate : undefined,
+          startDate,
+          endDate,
+          funds: funds.map(f => ({ name: f.name, weightage: f.weightage }))
+        },
+        rollingReturns
+      });
+    } catch (err: any) {
+      console.error('Error generating report:', err);
+      generateSIPLumpsumReport({
+        ...result,
+        inputs: {
+          monthlyInvestment,
+          lumpsumAmount: hasLumpsum ? lumpsumAmount : undefined,
+          lumpsumDate: hasLumpsum ? lumpsumDate : undefined,
+          startDate,
+          endDate,
+          funds: funds.map(f => ({ name: f.name, weightage: f.weightage }))
+        }
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   const isValidAllocation = funds.reduce((sum, fund) => sum + fund.weightage, 0) === 100;
 
   return (
     <div className="space-y-6">
       <Card className="p-4 sm:p-6">
         <h2 className="text-lg sm:text-xl font-semibold mb-4">SIP + Lumpsum Calculator</h2>
-        
+
         {/* SIP Configuration */}
         <div className="mb-6">
           <h3 className="text-lg font-medium mb-3 text-slate-700">SIP Investment</h3>
@@ -600,7 +649,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
                 step="100"
               />
             </div>
-            
+
             <div>
               <Label htmlFor="start-date">Start Date</Label>
               <Input
@@ -630,7 +679,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
                 </p>
               )}
             </div>
-            
+
             <div>
               <Label htmlFor="end-date">End Date</Label>
               <Input
@@ -671,7 +720,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
               {hasLumpsum ? 'Remove Lumpsum' : 'Add Lumpsum'}
             </Button>
           </div>
-          
+
           {hasLumpsum && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -690,7 +739,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
                     step="1000"
                   />
                 </div>
-                
+
                 <div>
                   <Label htmlFor="lumpsum-date">Investment Date</Label>
                   <Input
@@ -731,7 +780,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
                     />
                     <span className="text-sm">Distribute by Weightage</span>
                   </label>
-                  
+
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -767,7 +816,7 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
           )}
         </div>
 
-        <Button 
+        <Button
           onClick={calculateSIPLumpsum}
           disabled={!isValidAllocation || isLoading || funds.length === 0}
           className="w-full"
@@ -799,8 +848,19 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
 
       {result && (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={handleDownloadReport}
+              disabled={isDownloading}
+              className="flex items-center gap-2 border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {isDownloading ? 'Generating...' : 'Download Report'}
+            </Button>
+          </div>
           {/* Performance Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
             <Card className="p-3 sm:p-5 bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-200 shadow-lg hover:shadow-xl transition-shadow">
               <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Total Invested</div>
               <div className="text-lg sm:text-2xl font-bold text-slate-900">{formatCurrency(result.totalInvested)}</div>
@@ -816,32 +876,27 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
               <div className="text-xs text-indigo-600 mt-2">Portfolio worth</div>
             </Card>
 
-            <Card className={`p-3 sm:p-5 border-2 shadow-lg hover:shadow-xl transition-shadow ${
-              result.profit >= 0 
-                ? 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-200' 
-                : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200'
-            }`}>
-              <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
-                result.profit >= 0 ? 'text-green-700' : 'text-red-700'
-              }`}>Profit/Loss</div>
-              <div className={`text-lg sm:text-2xl font-bold flex items-center gap-2 ${
-                result.profit >= 0 ? 'text-green-700' : 'text-red-700'
+            <Card className={`p-3 sm:p-5 border-2 shadow-lg hover:shadow-xl transition-shadow ${result.profit >= 0
+              ? 'bg-gradient-to-br from-green-50 to-emerald-100 border-green-200'
+              : 'bg-gradient-to-br from-red-50 to-rose-100 border-red-200'
               }`}>
+              <div className={`text-xs font-semibold uppercase tracking-wide mb-1 ${result.profit >= 0 ? 'text-green-700' : 'text-red-700'
+                }`}>Profit/Loss</div>
+              <div className={`text-lg sm:text-2xl font-bold flex items-center gap-2 ${result.profit >= 0 ? 'text-green-700' : 'text-red-700'
+                }`}>
                 {result.profit >= 0 ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
                 {formatCurrency(result.profit)}
               </div>
-              <div className={`text-xs mt-2 ${
-                result.profit >= 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
+              <div className={`text-xs mt-2 ${result.profit >= 0 ? 'text-green-600' : 'text-red-600'
+                }`}>
                 {result.profitPercentage >= 0 ? '+' : ''}{result.profitPercentage.toFixed(2)}% returns
               </div>
             </Card>
 
             <Card className="p-3 sm:p-5 bg-gradient-to-br from-amber-50 to-orange-100 border-2 border-amber-200 shadow-lg hover:shadow-xl transition-shadow">
               <div className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-1">CAGR</div>
-              <div className={`text-lg sm:text-2xl font-bold ${
-                result.cagr >= 0 ? 'text-green-700' : 'text-red-700'
-              }`}>
+              <div className={`text-lg sm:text-2xl font-bold ${result.cagr >= 0 ? 'text-green-700' : 'text-red-700'
+                }`}>
                 {result.cagr >= 0 ? '+' : ''}{result.cagr.toFixed(2)}%
               </div>
               <div className="text-xs text-amber-600 mt-2">Annualized return</div>
@@ -849,15 +904,19 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
 
             <Card className="p-3 sm:p-5 bg-gradient-to-br from-purple-50 to-violet-100 border-2 border-purple-200 shadow-lg hover:shadow-xl transition-shadow">
               <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide mb-1">XIRR</div>
-              <div className={`text-lg sm:text-2xl font-bold ${
-                result.xirr >= 0 ? 'text-green-700' : 'text-red-700'
-              }`}>
+              <div className={`text-lg sm:text-2xl font-bold ${result.xirr >= 0 ? 'text-green-700' : 'text-red-700'
+                }`}>
                 {result.xirr >= 0 ? '+' : ''}{result.xirr.toFixed(2)}%
               </div>
               <div className="text-xs text-purple-600 mt-2">Internal rate</div>
             </Card>
+          </div>
 
-            <SimpleRollingReturnCard funds={funds} />
+          <div className="mb-6">
+            <RollingReturnsAnalysis
+              funds={funds}
+              onMetricsCalculated={setRollingReturnsMetrics}
+            />
           </div>
 
           {/* Chart */}
@@ -870,58 +929,58 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
             </div>
             <div className="w-full h-[300px] sm:h-[450px]">
               <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={result.chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis 
-                  dataKey="date" 
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                />
-                <YAxis 
-                  tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                />
-                <Tooltip 
-                  formatter={(value: number, name: string) => [
-                    formatCurrency(value), 
-                    name
-                  ]}
-                  labelFormatter={(label, payload) => {
-                    if (payload && payload.length > 0) {
-                      return `Investment Date: ${payload[0].payload.fullDate}`;
-                    }
-                    return label;
-                  }}
-                  contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '8px' }}
-                />
-                {/* @ts-ignore */}
-                <RechartsLegend 
-                  wrapperStyle={{ paddingTop: '20px' }}
-                  iconType="line"
-                />
-                
-                {/* Total Invested Line (Dashed) */}
-                <Line 
-                  type="monotone" 
-                  dataKey="invested" 
-                  stroke="#6b7280" 
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                  name="Total Invested"
-                  dot={false}
-                />
-                
-                {/* Bucket Performance Line (Bold) */}
-                <Line 
-                  type="monotone" 
-                  dataKey="Bucket Performance" 
-                  stroke="#1f2937" 
-                  strokeWidth={3}
-                  name="Bucket Performance"
-                  dot={false}
-                />
-              </LineChart>
+                <LineChart data={result.chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}K`}
+                    tick={{ fontSize: 12 }}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      formatCurrency(value),
+                      name
+                    ]}
+                    labelFormatter={(label, payload) => {
+                      if (payload && payload.length > 0) {
+                        return `Investment Date: ${payload[0].payload.fullDate}`;
+                      }
+                      return label;
+                    }}
+                    contentStyle={{ backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '8px' }}
+                  />
+                  {/* @ts-ignore */}
+                  <RechartsLegend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="line"
+                  />
+
+                  {/* Total Invested Line (Dashed) */}
+                  <Line
+                    type="monotone"
+                    dataKey="invested"
+                    stroke="#6b7280"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    name="Total Invested"
+                    dot={false}
+                  />
+
+                  {/* Bucket Performance Line (Bold) */}
+                  <Line
+                    type="monotone"
+                    dataKey="Bucket Performance"
+                    stroke="#1f2937"
+                    strokeWidth={3}
+                    name="Bucket Performance"
+                    dot={false}
+                  />
+                </LineChart>
               </ResponsiveContainer>
             </div>
           </Card>
@@ -933,62 +992,63 @@ export function SIPLumpsumCalculator({ funds }: SIPLumpsumCalculatorProps) {
               <p className="text-xs sm:text-sm text-slate-600">Detailed breakdown of each fund's contribution</p>
             </div>
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs sm:text-sm">Fund Name</TableHead>
-                  <TableHead className="text-xs sm:text-sm">Total Invested</TableHead>
-                  <TableHead className="text-xs sm:text-sm">SIP Invested</TableHead>
-                  <TableHead className="text-xs sm:text-sm">Lumpsum Invested</TableHead>
-                  <TableHead className="text-xs sm:text-sm">Current Value</TableHead>
-                  <TableHead className="text-xs sm:text-sm">Profit/Loss</TableHead>
-                  <TableHead className="text-xs sm:text-sm">% Returns</TableHead>
-                  <TableHead className="text-xs sm:text-sm">CAGR</TableHead>
-                  <TableHead className="text-xs sm:text-sm">XIRR</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {result.fundResults.map((fund, index) => {
-                  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-                  const fundColor = colors[index % colors.length];
-                  
-                  return (
-                    <TableRow key={fund.fundId}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: fundColor }}
-                          />
-                          {fund.fundName}
-                        </div>
-                      </TableCell>
-                      <TableCell>{formatCurrency(fund.totalInvested)}</TableCell>
-                      <TableCell className="text-gray-600">{formatCurrency(fund.sipInvested)}</TableCell>
-                      <TableCell className="text-gray-600">{formatCurrency(fund.lumpsumInvested)}</TableCell>
-                      <TableCell>{formatCurrency(fund.currentValue)}</TableCell>
-                      <TableCell className={fund.profit >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
-                        {fund.profit >= 0 ? '+' : ''}{formatCurrency(fund.profit)}
-                      </TableCell>
-                      <TableCell className={fund.profitPercentage >= 0 ? 'text-green-600' : 'text-red-600'}>
-                        {fund.profitPercentage >= 0 ? '+' : ''}{fund.profitPercentage.toFixed(2)}%
-                      </TableCell>
-                      <TableCell className={fund.cagr >= 0 ? 'text-black' : 'text-red-600'}>
-                        {fund.cagr.toFixed(2)}%
-                      </TableCell>
-                      <TableCell className={fund.xirr >= 0 ? 'text-black' : 'text-red-600'}>
-                        {fund.xirr.toFixed(2)}%
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs sm:text-sm">Fund Name</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Total Invested</TableHead>
+                    <TableHead className="text-xs sm:text-sm">SIP Invested</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Lumpsum Invested</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Current Value</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Profit/Loss</TableHead>
+                    <TableHead className="text-xs sm:text-sm">% Returns</TableHead>
+                    <TableHead className="text-xs sm:text-sm">CAGR</TableHead>
+                    <TableHead className="text-xs sm:text-sm">XIRR</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {result.fundResults.map((fund, index) => {
+                    const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+                    const fundColor = colors[index % colors.length];
+
+                    return (
+                      <TableRow key={fund.fundId}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: fundColor }}
+                            />
+                            {fund.fundName}
+                          </div>
+                        </TableCell>
+                        <TableCell>{formatCurrency(fund.totalInvested)}</TableCell>
+                        <TableCell className="text-gray-600">{formatCurrency(fund.sipInvested)}</TableCell>
+                        <TableCell className="text-gray-600">{formatCurrency(fund.lumpsumInvested)}</TableCell>
+                        <TableCell>{formatCurrency(fund.currentValue)}</TableCell>
+                        <TableCell className={fund.profit >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}>
+                          {fund.profit >= 0 ? '+' : ''}{formatCurrency(fund.profit)}
+                        </TableCell>
+                        <TableCell className={fund.profitPercentage >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {fund.profitPercentage >= 0 ? '+' : ''}{fund.profitPercentage.toFixed(2)}%
+                        </TableCell>
+                        <TableCell className={fund.cagr >= 0 ? 'text-black' : 'text-red-600'}>
+                          {fund.cagr.toFixed(2)}%
+                        </TableCell>
+                        <TableCell className={fund.xirr >= 0 ? 'text-black' : 'text-red-600'}>
+                          {fund.xirr.toFixed(2)}%
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             </div>
           </Card>
         </div>
-      )}
-    </div>
+      )
+      }
+    </div >
   );
 }
 

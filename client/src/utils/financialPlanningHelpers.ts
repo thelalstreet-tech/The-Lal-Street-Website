@@ -271,15 +271,13 @@ export function generateReportHTML(
 
 export function downloadReport(inputs: any, results: any): void {
   const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
+    return 'Rs. ' + new Intl.NumberFormat('en-IN', {
       maximumFractionDigits: 0,
     }).format(amount);
   };
 
   const html = generateReportHTML(inputs, results, formatCurrency, `${window.location.origin}/logo.png`);
-  
+
   // Open in new window with print-friendly styling
   const printWindow = window.open('', '_blank');
   if (!printWindow) {
