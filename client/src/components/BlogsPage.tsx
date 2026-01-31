@@ -124,7 +124,7 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
@@ -136,6 +136,20 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
   const truncateText = useCallback((text: string, maxLength: number) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength).trim() + '...';
+  }, []);
+
+  // Decode HTML entities and strip HTML tags for clean text display
+  const stripHtmlAndDecode = useCallback((html: string): string => {
+    // Create a temporary element to decode HTML entities
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    const decoded = txt.value;
+    // Remove HTML tags and clean up extra whitespace
+    return decoded
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }, []);
 
   // Helper to parse categories/tags that might be strings or arrays
@@ -204,7 +218,7 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
               >
                 The Lal Street
               </button>
-              
+
               {/* Navigation Links */}
               <nav className="hidden md:flex items-center gap-6">
                 <button
@@ -276,11 +290,10 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
                     onClick={() => {
                       setSelectedCategory('');
                     }}
-                    className={`w-full flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      !selectedCategory
-                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
+                    className={`w-full flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${!selectedCategory
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                      : 'text-gray-700 hover:bg-gray-50'
+                      }`}
                   >
                     All
                   </button>
@@ -290,11 +303,10 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
                       onClick={() => {
                         setSelectedCategory(cat.name);
                       }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                        selectedCategory === cat.name
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      }`}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${selectedCategory === cat.name
+                        ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                        : 'text-gray-700 hover:bg-gray-50'
+                        }`}
                     >
                       <span className="flex-1 text-left truncate">{cat.name}</span>
                       <span className="text-xs text-gray-500 ml-2">({cat.blogCount})</span>
@@ -327,7 +339,7 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                 </div>
-                
+
                 <div className="absolute bottom-0 left-0 right-0 p-6 text-white">
                   <div className="flex items-center gap-2 mb-2">
                     {parseArray(featuredBlog.categories).slice(0, 2).map((cat) => {
@@ -343,15 +355,15 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
                       <Badge className="bg-purple-600 text-white text-xs px-2 py-0.5">Exclusive</Badge>
                     )}
                   </div>
-                  
+
                   <h2 className="text-2xl font-bold mb-2 leading-tight group-hover:text-blue-300 transition-colors">
                     {featuredBlog.title || 'Featured Article'}
                   </h2>
-                  
+
                   <p className="text-sm text-white/90 mb-4 line-clamp-2">
-                    {featuredBlog.content ? truncateText(featuredBlog.content.replace(/<[^>]*>/g, ''), 100) : ''}
+                    {featuredBlog.content ? truncateText(stripHtmlAndDecode(featuredBlog.content), 100) : ''}
                   </p>
-                  
+
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 text-xs text-white/80">
                       <div className="flex items-center gap-1">
@@ -447,19 +459,18 @@ export function BlogsPage({ onNavigate }: BlogsPageProps) {
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {trendingTags.map((tag) => {
-                    const cleanTagName = typeof tag.name === 'string' 
-                      ? tag.name.replace(/[\[\]"\\]/g, '').trim() 
+                    const cleanTagName = typeof tag.name === 'string'
+                      ? tag.name.replace(/[\[\]"\\]/g, '').trim()
                       : tag.name;
                     if (!cleanTagName) return null;
                     return (
                       <button
                         key={tag.id}
                         onClick={() => handleTagToggle(cleanTagName)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                          selectedTags.includes(cleanTagName)
-                            ? 'bg-blue-600 text-white shadow-md'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${selectedTags.includes(cleanTagName)
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
                       >
                         {cleanTagName}
                       </button>

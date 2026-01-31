@@ -24,6 +24,20 @@ export const BlogCard = memo(function BlogCard({
     return str.replace(/[\[\]"\\]/g, '').trim();
   };
 
+  // Decode HTML entities and strip HTML tags for clean text display
+  const stripHtmlAndDecode = (html: string): string => {
+    // Create a temporary element to decode HTML entities
+    const txt = document.createElement('textarea');
+    txt.innerHTML = html;
+    const decoded = txt.value;
+    // Remove HTML tags and clean up extra whitespace
+    return decoded
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   return (
     <article
       onClick={() => onClick(blog)}
@@ -48,7 +62,7 @@ export const BlogCard = memo(function BlogCard({
           </Badge>
         )}
       </div>
-      
+
       <div className="p-4">
         <div className="flex items-center gap-1.5 mb-2">
           {parseArray(blog.categories).slice(0, 2).map((cat) => {
@@ -61,15 +75,15 @@ export const BlogCard = memo(function BlogCard({
             );
           })}
         </div>
-        
+
         <h3 className="text-base font-bold text-gray-900 mb-1.5 line-clamp-2 group-hover:text-blue-600 transition-colors leading-snug">
           {blog.title || 'Untitled'}
         </h3>
-        
+
         <p className="text-xs text-gray-600 mb-3 line-clamp-2 leading-relaxed">
-          {blog.content ? truncateText(blog.content.replace(/<[^>]*>/g, ''), 100) : 'No content available'}
+          {blog.content ? truncateText(stripHtmlAndDecode(blog.content), 100) : 'No content available'}
         </p>
-        
+
         <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
