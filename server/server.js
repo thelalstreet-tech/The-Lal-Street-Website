@@ -184,13 +184,10 @@ app.get('/api/debug/env', (req, res) => {
 
 
 // --- Connect to Database ---
-// Connect to MongoDB before starting server (non-blocking)
-// Initialize scheduled jobs (if enabled) - must be before connectDB
-if (process.env.USE_NODE_CRON === 'true') {
-  require('./jobs/dailyRecalculation.job.js');
-  require('./jobs/newsRefresh.job.js');
-  logger.info('Scheduled jobs initialized');
-}
+// Connect to MongoDB, then boot the in-process scheduler.
+// The scheduler keeps Render warm via self-ping and runs all cron jobs
+// internally — zero dependency on unreliable external cron services.
+const { initScheduler } = require('./jobs/scheduler');
 
 connectDB().then((connected) => {
   if (connected) {
@@ -198,9 +195,17 @@ connectDB().then((connected) => {
   } else {
     logger.warn('Database connection not available. Some features may be disabled.');
   }
+
+  // Always start the scheduler regardless of env — it handles both
+  // the job execution AND the keep-alive self-ping for Render.
+  initScheduler();
+  logger.info('In-process scheduler started.');
 }).catch((error) => {
   logger.error('Failed to connect to MongoDB:', error);
   logger.warn('Server will continue, but authentication features will be disabled.');
+
+  // Still start the scheduler so keep-alive ping works even if DB is down
+  initScheduler();
 });
 
 // --- Start the Server ---

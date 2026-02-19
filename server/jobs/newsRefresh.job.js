@@ -65,37 +65,8 @@ async function runNewsCleanup() {
     }
 }
 
-// If running with node-cron (for persistent servers)
-if (process.env.USE_NODE_CRON === 'true') {
-    const cron = require('node-cron');
-
-    // Run every 2 hours
-    cron.schedule('0 */2 * * *', async () => {
-        logger.info('[Cron] News refresh job triggered');
-        await runNewsRefresh();
-    }, {
-        scheduled: true,
-        timezone: "Asia/Kolkata"
-    });
-
-    // Run cleanup once daily at 3:00 AM
-    cron.schedule('0 3 * * *', async () => {
-        logger.info('[Cron] News cleanup job triggered');
-        await runNewsCleanup();
-    }, {
-        scheduled: true,
-        timezone: "Asia/Kolkata"
-    });
-
-    logger.info('[Cron] News refresh job scheduled (runs every 2 hours)');
-    logger.info('[Cron] News cleanup job scheduled (runs at 3:00 AM daily)');
-
-    // Initial fetch on startup (after a short delay)
-    setTimeout(async () => {
-        logger.info('[Startup] Running initial news fetch...');
-        await runNewsRefresh();
-    }, 5000); // Wait 5 seconds after startup
-}
+// NOTE: Scheduling is handled centrally by server/jobs/scheduler.js.
+// This file only exports the job functions.
 
 module.exports = {
     runNewsRefresh,

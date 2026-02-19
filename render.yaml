@@ -1,24 +1,62 @@
 # Render Configuration for Backend Deployment
-# This file makes it easy to deploy your Express server to Render
+# This file makes it easy to deploy your Express server to Render.
+#
+# ⚡ Cold-start fix: The server uses an in-process node-cron scheduler +
+#    a self-ping every 10 minutes to keep the Render dyno warm.
+#    No external cron service is needed.
 
 services:
   # Backend API Service
   - type: web
     name: lal-street-api
     runtime: node
-    region: singapore  # or oregon, frankfurt (closest to your users)
-    plan: free  # or starter for $7/month (no cold starts)
+    region: singapore  # Closest to IN users. Options: oregon, frankfurt, ohio, singapore
+    plan: free          # Upgrade to "starter" ($7/month) for zero cold starts
     rootDir: server
     buildCommand: npm install
     startCommand: node server.js
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: PORT
         value: 5000
+
       - key: ALLOWED_ORIGINS
         value: https://the-lal-street-client.vercel.app,http://localhost:5173
-      - key: ADMIN_PASSWORD
-        sync: false  # This requires manual setup - set in Render dashboard
-    healthCheckPath: /api/health
 
+      # RENDER_EXTERNAL_URL is automatically injected by Render at deploy time
+      # (e.g. https://lal-street-api.onrender.com).
+      # The scheduler uses it to self-ping /api/health every 10 minutes.
+      # DO NOT set this manually — Render handles it.
+
+      - key: ADMIN_PASSWORD
+        sync: false  # Set manually in Render dashboard → Environment
+
+      - key: MONGODB_URI
+        sync: false  # Set manually in Render dashboard → Environment
+
+      - key: JWT_SECRET
+        sync: false
+
+      - key: JWT_REFRESH_SECRET
+        sync: false
+
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+
+      - key: CLOUDINARY_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      - key: CRON_SECRET
+        sync: false

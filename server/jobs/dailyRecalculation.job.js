@@ -27,7 +27,7 @@ async function runDailyRecalculation() {
 
   try {
     const results = await recalculateAllBuckets();
-    
+
     const duration = Date.now() - startTime;
     logger.info(`[Daily Recalculation] Completed in ${duration}ms`);
     logger.info(`[Daily Recalculation] Results: ${results.successful}/${results.total} successful, ${results.failed} failed`);
@@ -45,7 +45,7 @@ async function runDailyRecalculation() {
     const duration = Date.now() - startTime;
     logger.error('[Daily Recalculation] Job failed:', error);
     logger.error(`[Daily Recalculation] Failed after ${duration}ms`);
-    
+
     return {
       success: false,
       duration,
@@ -54,21 +54,8 @@ async function runDailyRecalculation() {
   }
 }
 
-// If running with node-cron (for persistent servers)
-if (process.env.USE_NODE_CRON === 'true') {
-  const cron = require('node-cron');
-  
-  // Run daily at 2:00 AM
-  cron.schedule('0 2 * * *', async () => {
-    logger.info('[Cron] Daily recalculation job triggered');
-    await runDailyRecalculation();
-  }, {
-    scheduled: true,
-    timezone: "Asia/Kolkata" // Adjust to your timezone
-  });
-  
-  logger.info('[Cron] Daily recalculation job scheduled (runs at 2:00 AM daily)');
-}
+// NOTE: Scheduling is handled centrally by server/jobs/scheduler.js.
+// This file only exports the job function.
 
 module.exports = {
   runDailyRecalculation
