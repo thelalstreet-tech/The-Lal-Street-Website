@@ -18,28 +18,71 @@ export function SuggestedBucketCard({ bucket, onViewPerformance, onImportBucket 
     value: number;
     returns: number;
     returnsPercent: number;
+    avgReturn: number;
+    isLive: boolean;
   } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Standard investment amount for display
   const INVESTMENT_AMOUNT = 100000;
 
   useEffect(() => {
-    // Calculate returns based on mean rolling return
-    // For 3 years, we use the mean annual return
-    const meanAnnualReturn = bucket.performance.rollingReturns.bucket.mean / 100;
-    const years = 3;
-    
-    // Calculate final value using compound interest
-    const finalValue = INVESTMENT_AMOUNT * Math.pow(1 + meanAnnualReturn, years);
-    const returns = finalValue - INVESTMENT_AMOUNT;
-    const returnsPercent = (returns / INVESTMENT_AMOUNT) * 100;
+    let cancelled = false;
 
-    setCalculatedReturns({
-      investment: INVESTMENT_AMOUNT,
-      value: finalValue,
-      returns: returns,
-      returnsPercent: returnsPercent,
+    const loadLiveData = async () => {
+      setIsLoading(true);
+      try {
+        const { getBucketLiveReturns, isDataStale } = await import('../services/bucketLiveReturnsService');
+        const apiData = await getBucketLiveReturns(bucket.id);
+
+        if (cancelled) return;
+
+        if (
+          apiData &&
+          !isDataStale(apiData.calculationDate) &&
+          apiData.lumpsumInvestment != null &&
+          apiData.lumpsumCurrentValue != null &&
+          apiData.lumpsumReturns != null &&
+          apiData.lumpsumReturnsPercent != null
+        ) {
+          setCalculatedReturns({
+            investment: apiData.lumpsumInvestment,
+            value: apiData.lumpsumCurrentValue,
+            returns: apiData.lumpsumReturns,
+            returnsPercent: apiData.lumpsumReturnsPercent,
+            avgReturn: apiData.bucketCagr3Y ?? bucket.performance.rollingReturns.bucket.mean,
+            isLive: true,
+          });
+          return;
+        }
+      } catch {
+        // fall through to static calculation
+      }
+
+      if (cancelled) return;
+
+      // Fallback: static estimate from stored rolling returns mean
+      const meanAnnualReturn = bucket.performance.rollingReturns.bucket.mean / 100;
+      const years = 3;
+      const finalValue = INVESTMENT_AMOUNT * Math.pow(1 + meanAnnualReturn, years);
+      const returns = finalValue - INVESTMENT_AMOUNT;
+      const returnsPercent = (returns / INVESTMENT_AMOUNT) * 100;
+
+      setCalculatedReturns({
+        investment: INVESTMENT_AMOUNT,
+        value: finalValue,
+        returns,
+        returnsPercent,
+        avgReturn: bucket.performance.rollingReturns.bucket.mean,
+        isLive: false,
+      });
+    };
+
+    loadLiveData().finally(() => {
+      if (!cancelled) setIsLoading(false);
     });
+
+    return () => { cancelled = true; };
   }, [bucket]);
 
   const getRiskColor = (risk: string) => {
@@ -83,7 +126,7 @@ export function SuggestedBucketCard({ bucket, onViewPerformance, onImportBucket 
     <Card className="group relative overflow-hidden border-2 border-slate-200 hover:border-blue-400 hover:shadow-2xl transition-all duration-300 bg-white">
       {/* Gradient Background Accent */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-      
+
       <div className="p-5 sm:p-6 flex flex-col h-full">
         {/* Header Section */}
         <div className="mb-4">
@@ -108,106 +151,131 @@ export function SuggestedBucketCard({ bucket, onViewPerformance, onImportBucket 
         </div>
 
         {/* Returns Graph Section - Prominent Display */}
-        {calculatedReturns && (
-          <div className="mb-5 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl p-4 border border-blue-100">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-gray-700">Based on 3 years performance</span>
-              <div className="flex items-center gap-1 bg-white rounded-lg px-2 py-1 border border-gray-200">
-                <button
-                  onClick={() => setSelectedPeriod('3Y')}
-                  className={`text-xs font-medium px-2 py-0.5 rounded transition-colors ${
-                    selectedPeriod === '3Y'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-600 hover:text-blue-600'
+        <div className="mb-5 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl p-4 border border-blue-100">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold text-gray-700">
+              Based on 3 years performance
+              {!isLoading && calculatedReturns && !calculatedReturns.isLive && (
+                <span className="ml-1 text-gray-400 font-normal">(est.)</span>
+              )}
+            </span>
+            <div className="flex items-center gap-1 bg-white rounded-lg px-2 py-1 border border-gray-200">
+              <button
+                onClick={() => setSelectedPeriod('3Y')}
+                className={`text-xs font-medium px-2 py-0.5 rounded transition-colors ${selectedPeriod === '3Y'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-blue-600'
                   }`}
-                >
-                  3Y
-                </button>
-              </div>
-            </div>
-
-            {/* Horizontal Bar Chart */}
-            <div className="space-y-3">
-              {/* Total Investment */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-medium text-gray-600">Total Investment</span>
-                  <span className="text-sm font-bold text-gray-900">{formatCurrency(calculatedReturns.investment)}</span>
-                </div>
-                <div className="relative h-6 bg-gray-100 rounded-md overflow-hidden">
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-slate-600 to-slate-700 rounded-md"
-                    style={{ width: `${investmentWidth}%` }}
-                  >
-                    <div
-                      className="absolute inset-0 opacity-20"
-                      style={{
-                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.1) 4px, rgba(255,255,255,0.1) 8px)',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Bucket Value */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-medium text-gray-600">Bucket Value</span>
-                  <span className="text-sm font-bold text-blue-700">{formatCurrency(calculatedReturns.value)}</span>
-                </div>
-                <div className="relative h-6 bg-gray-100 rounded-md overflow-hidden">
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-md"
-                    style={{ width: `${valueWidth}%` }}
-                  >
-                    <div
-                      className="absolute inset-0 opacity-20"
-                      style={{
-                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.15) 4px, rgba(255,255,255,0.15) 8px)',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Returns - Highlighted */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-medium text-gray-600">Returns</span>
-                  <div className="flex items-center gap-1.5">
-                    <TrendingUp className="h-3 w-3 text-emerald-600" />
-                    <span className="text-sm font-bold text-emerald-700">
-                      {formatCurrency(calculatedReturns.returns)}
-                    </span>
-                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                      +{formatNumber(calculatedReturns.returnsPercent)}%
-                    </span>
-                  </div>
-                </div>
-                <div className="relative h-6 bg-gray-100 rounded-md overflow-hidden">
-                  <div
-                    className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-md"
-                    style={{ width: `${returnsWidth}%` }}
-                  >
-                    <div
-                      className="absolute inset-0 opacity-20"
-                      style={{
-                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.15) 4px, rgba(255,255,255,0.15) 8px)',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
+              >
+                3Y
+              </button>
             </div>
           </div>
-        )}
+
+          {/* Loading Skeleton */}
+          {isLoading ? (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2, 3].map(i => (
+                <div key={i}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="h-3 bg-gray-200 rounded w-24" />
+                    <div className="h-4 bg-gray-200 rounded w-20" />
+                  </div>
+                  <div className="h-6 bg-gray-200 rounded-md" />
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Horizontal Bar Chart */
+            calculatedReturns && (
+              <div className="space-y-3">
+                {/* Total Investment */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-gray-600">Total Investment</span>
+                    <span className="text-sm font-bold text-gray-900">{formatCurrency(calculatedReturns.investment)}</span>
+                  </div>
+                  <div className="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+                    <div
+                      className="absolute top-0 left-0 h-full bg-gradient-to-r from-slate-600 to-slate-700 rounded-md"
+                      style={{ width: `${investmentWidth}%` }}
+                    >
+                      <div
+                        className="absolute inset-0 opacity-20"
+                        style={{
+                          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.1) 4px, rgba(255,255,255,0.1) 8px)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bucket Value */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-gray-600">Bucket Value</span>
+                    <span className="text-sm font-bold text-blue-700">{formatCurrency(calculatedReturns.value)}</span>
+                  </div>
+                  <div className="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+                    <div
+                      className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-md"
+                      style={{ width: `${valueWidth}%` }}
+                    >
+                      <div
+                        className="absolute inset-0 opacity-20"
+                        style={{
+                          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.15) 4px, rgba(255,255,255,0.15) 8px)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Returns - Highlighted */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-gray-600">Returns</span>
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="h-3 w-3 text-emerald-600" />
+                      <span className="text-sm font-bold text-emerald-700">
+                        {formatCurrency(calculatedReturns.returns)}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                        +{formatNumber(calculatedReturns.returnsPercent)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="relative h-6 bg-gray-100 rounded-md overflow-hidden">
+                    <div
+                      className="absolute top-0 left-0 h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-md"
+                      style={{ width: `${returnsWidth}%` }}
+                    >
+                      <div
+                        className="absolute inset-0 opacity-20"
+                        style={{
+                          backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.15) 4px, rgba(255,255,255,0.15) 8px)',
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
+        </div>
 
         {/* Key Metrics */}
         <div className="mb-4 grid grid-cols-3 gap-2">
           <div className="text-center p-2 bg-blue-50 rounded-lg border border-blue-100">
             <p className="text-xs text-gray-600 mb-0.5">Avg Return</p>
             <p className="text-sm font-bold text-blue-700">
-              {bucket.performance.rollingReturns.bucket.mean.toFixed(1)}%
+              {isLoading ? (
+                <span className="inline-block h-4 w-10 bg-blue-200 rounded animate-pulse" />
+              ) : calculatedReturns ? (
+                `${formatNumber(calculatedReturns.avgReturn)}%`
+              ) : (
+                `${bucket.performance.rollingReturns.bucket.mean.toFixed(1)}%`
+              )}
             </p>
           </div>
           <div className="text-center p-2 bg-emerald-50 rounded-lg border border-emerald-100">
@@ -253,7 +321,7 @@ export function SuggestedBucketCard({ bucket, onViewPerformance, onImportBucket 
             <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
             <span>View Performance</span>
           </Button>
-          
+
           <div className="grid grid-cols-2 gap-2">
             {bucket.category === 'investment' || bucket.category === 'both' ? (
               <Button

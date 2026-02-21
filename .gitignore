@@ -69,3 +69,8 @@ test-*.ts
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+.ai-analysis.txt
+
+# Python scraper scripts (local testing only)
+scripts/

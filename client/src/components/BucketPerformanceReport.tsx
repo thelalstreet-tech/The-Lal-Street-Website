@@ -672,13 +672,13 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rollingReturns.funds.map((fundData) => {
-                const fund = bucket.funds.find(f => f.id === fundData.fundId);
-                const liveData = fundLiveReturns.find(f => f.fundId === fundData.fundId);
+              {bucket.funds.map((fund) => {
+                const fundData = rollingReturns.funds.find(f => f.fundId === fund.id);
+                const liveData = fundLiveReturns.find(f => f.fundId === fund.id);
                 return (
-                  <TableRow key={fundData.fundId}>
+                  <TableRow key={fund.id}>
                     <TableCell className="font-medium min-w-[140px] sm:min-w-[200px] text-xs sm:text-sm">
-                      <span className="block whitespace-normal break-words">{fundData.fundName}</span>
+                      <span className="block whitespace-normal break-words">{fund.name}</span>
                     </TableCell>
                     <TableCell className="text-xs sm:text-sm">
                       {liveData && liveData.currentNAV !== null ? formatCurrency(liveData.currentNAV) : isLoading ? '...' : 'N/A'}
@@ -693,24 +693,28 @@ export function BucketPerformanceReport({ bucket }: BucketPerformanceReportProps
                       <div className="flex items-center gap-1 sm:gap-2">
                         <span className={liveData && liveData.positivePercentageFromLaunch !== null
                           ? (liveData.positivePercentageFromLaunch >= 70 ? 'text-green-700' : liveData.positivePercentageFromLaunch >= 50 ? 'text-yellow-700' : 'text-red-700')
-                          : (fundData.positivePercentage >= 70 ? 'text-green-700' : fundData.positivePercentage >= 50 ? 'text-yellow-700' : 'text-red-700')
+                          : fundData
+                            ? (fundData.positivePercentage >= 70 ? 'text-green-700' : fundData.positivePercentage >= 50 ? 'text-yellow-700' : 'text-red-700')
+                            : 'text-gray-500'
                         }>
                           {liveData && liveData.positivePercentageFromLaunch !== null
-                            ? formatNumber(liveData.positivePercentageFromLaunch)
-                            : formatNumber(fundData.positivePercentage)
-                          }%
+                            ? `${formatNumber(liveData.positivePercentageFromLaunch)}%`
+                            : fundData
+                              ? `${formatNumber(fundData.positivePercentage)}%`
+                              : 'N/A'
+                          }
                         </span>
                         {((liveData && liveData.positivePercentageFromLaunch !== null && liveData.positivePercentageFromLaunch >= 70) ||
-                          (liveData && liveData.positivePercentageFromLaunch === null && fundData.positivePercentage >= 70)) && (
+                          (liveData && liveData.positivePercentageFromLaunch === null && fundData && fundData.positivePercentage >= 70)) && (
                             <CheckCircle2 className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
                           )}
                       </div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-green-700 text-xs sm:text-sm">
-                      {formatNumber(fundData.max)}%
+                      {fundData ? `${formatNumber(fundData.max)}%` : 'N/A'}
                     </TableCell>
                     <TableCell className="hidden sm:table-cell text-red-700 text-xs sm:text-sm">
-                      {formatNumber(fundData.min)}%
+                      {fundData ? `${formatNumber(fundData.min)}%` : 'N/A'}
                     </TableCell>
                   </TableRow>
                 );
