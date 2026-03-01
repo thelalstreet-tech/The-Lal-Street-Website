@@ -9,6 +9,7 @@ node_modules/
 
 # Production builds
 /build
+/client/dist
 /dist
 .next/
 .cache/
@@ -70,7 +71,15 @@ test-*.ts
 # yarn.lock
 # pnpm-lock.yaml
 
-.ai-analysis.txt
+ai-analysis.txt
 
 # Python scraper scripts (local testing only)
 scripts/
+
+# Server data CSVs (Publicly available benchmarks)
+server/data/*.csv
+
+# Server debug/test scripts
+server/test_*.js
+server/debug_*.js
+server/check_*.js

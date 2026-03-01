@@ -8,6 +8,7 @@ import { AIStockAnalysisPage } from './components/AIStockAnalysisPage';
 import { BlogsPage } from './components/BlogsPage';
 import { BlogDetailPage } from './components/BlogDetailPage';
 import { NewsPage } from './components/NewsPage';
+import { StockIndicesPage } from './components/StockIndicesPage';
 import { AdminPage } from './components/AdminPage';
 import { Footer } from './components/Footer';
 import { LoginModal } from './components/LoginModal';
@@ -28,7 +29,7 @@ export interface SelectedFund extends Fund {
   weightage: number;
 }
 
-export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'blogs' | 'blog-detail' | 'news' | 'admin';
+export type PageType = 'home' | 'investment-plan' | 'retirement-plan' | 'financial-planning' | 'ai-stock-analysis' | 'stock-indices' | 'blogs' | 'blog-detail' | 'news' | 'admin';
 
 // Utility function to distribute 100% weightage as whole numbers
 const distributeWeightage = (count: number): number[] => {
@@ -101,7 +102,7 @@ export default function App() {
           setSelectedBlogId(blogId);
           setActivePage('blog-detail');
         }
-      } else if (['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'blogs', 'admin'].includes(hash)) {
+      } else if (['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'stock-indices', 'blogs', 'admin'].includes(hash)) {
         setActivePage(hash as PageType);
         setSelectedBlogId(null);
       }
@@ -112,7 +113,7 @@ export default function App() {
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1);
-      if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'blogs', 'admin'].includes(hash)) {
+      if (hash && ['home', 'investment-plan', 'retirement-plan', 'financial-planning', 'ai-stock-analysis', 'stock-indices', 'blogs', 'admin'].includes(hash)) {
         setActivePage(hash as PageType);
       }
     };
@@ -288,6 +289,8 @@ export default function App() {
         return selectedBlogId ? <BlogDetailPage blogId={selectedBlogId} onNavigate={handleNavigate} /> : <BlogsPage onNavigate={handleNavigate} />;
       case 'news':
         return <NewsPage onNavigate={handleNavigate} />;
+      case 'stock-indices':
+        return <StockIndicesPage onNavigate={handleNavigate} />;
       case 'admin':
         return <AdminPage onNavigate={handleNavigate} />;
       default:

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Home, BarChart3, Target, FileText, Brain, BookOpen, Newspaper, LogIn, LogOut, ChevronDown } from 'lucide-react';
+import { Home, BarChart3, Target, FileText, Brain, BookOpen, Newspaper, LogIn, LogOut, ChevronDown, TrendingUp } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from './ui/utils';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,8 +33,9 @@ export function Navigation({ activePage, onNavigate, selectedFundsCount = 0 }: N
     { id: 'ai-stock-analysis', label: 'AI Analysis', icon: Brain },
   ];
 
-  // Content dropdown items (News + Blogs)
+  // Content dropdown items (Indices + News + Blogs)
   const contentItems = [
+    { id: 'stock-indices', label: 'Indices', icon: TrendingUp, description: 'Market index data' },
     { id: 'news', label: 'News', icon: Newspaper, description: 'Latest market news' },
     { id: 'blogs', label: 'Blogs', icon: BookOpen, description: 'Insights & guides' },
   ];

@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 const connectDB = async () => {
   try {
     const mongoURI = process.env.MONGODB_URI;
-    
+
     if (!mongoURI) {
       logger.warn('MONGODB_URI is not defined in environment variables');
       logger.warn('Authentication features will be disabled. To enable auth, set MONGODB_URI in your .env file');
@@ -18,14 +18,15 @@ const connectDB = async () => {
     const options = {
       // These options are recommended for MongoDB Atlas
       maxPoolSize: 10, // Maintain up to 10 socket connections
-      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+      serverSelectionTimeoutMS: 10000, // Increased to 10s for better resilience (e.g., DNS, Atlas peering)
       socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
     };
 
+    logger.info('Attempting to connect to MongoDB...');
     await mongoose.connect(mongoURI, options);
-    
+
     logger.info('MongoDB connected successfully');
-    
+
     // Handle connection events
     mongoose.connection.on('error', (err) => {
       logger.error('MongoDB connection error:', err);

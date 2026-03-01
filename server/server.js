@@ -80,16 +80,23 @@ app.use((req, res, next) => {
 // General API rate limit
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Max 100 requests per windowMs per IP
+  max: 300, // Increased from 100 to 300 for better UX during development
   message: {
     status: 429,
     message: 'Too many requests from this IP, please try again after 15 minutes.'
   },
   standardHeaders: true, // Return rate limit info in headers
   legacyHeaders: false,
-  // Skip rate limiting for health check and auth status check
+  // Skip rate limiting for health check and critical auth paths
   skip: (req) => {
-    return req.path === '/api/health' || req.path === '/api/auth/me';
+    const skipPaths = [
+      '/api/health',
+      '/api/auth/me',
+      '/api/auth/refresh',
+      '/api/auth/login',
+      '/api/auth/logout'
+    ];
+    return skipPaths.some(p => req.path.startsWith(p));
   }
 });
 
@@ -135,6 +142,10 @@ app.use('/api/bucket-live-returns', bucketLiveReturnsRoutes);
 // News aggregation routes
 const newsRoutes = require('./routes/news.routes.js');
 app.use('/api/news', newsRoutes);
+
+// Stock indices routes
+const stockIndexRoutes = require('./routes/stockIndex.routes.js');
+app.use('/api/stock-indices', stockIndexRoutes);
 
 // Enhanced health check route with server statistics
 app.get('/api/health', (req, res) => {
