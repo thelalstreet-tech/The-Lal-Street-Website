@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Search, Layers, ArrowLeft, Loader2, Info } from 'lucide-react';
+import { TrendingUp, Search, Layers, ArrowLeft, Loader2, Info, ExternalLink } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { cn } from './ui/utils';
+import { StockChartModal } from './StockChartModal';
 
 interface Constituent {
     symbol: string;
@@ -32,10 +33,19 @@ export function StockIndicesPage({ onNavigate }: StockIndicesPageProps) {
     const [indexLoading, setIndexLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Selected stock for chart modal
+    const [selectedStock, setSelectedStock] = useState<Constituent | null>(null);
+    const [showChartModal, setShowChartModal] = useState(false);
+
     // Use the backend URL from environment or default to localhost:5000
     const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000';
 
     // Fetch index list on mount
+    const handleStockClick = (stock: Constituent) => {
+        setSelectedStock(stock);
+        setShowChartModal(true);
+    };
+
     useEffect(() => {
         const fetchIndices = async () => {
             try {
@@ -211,14 +221,23 @@ export function StockIndicesPage({ onNavigate }: StockIndicesPageProps) {
                                 <tbody className="divide-y divide-slate-100 text-sm">
                                     {filteredConstituents.length > 0 ? (
                                         filteredConstituents.map((stock, index) => (
-                                            <tr key={stock.symbol} className="hover:bg-slate-50/80 transition-colors group">
+                                            <tr
+                                                key={stock.symbol}
+                                                className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                                                onClick={() => handleStockClick(stock)}
+                                            >
                                                 <td className="px-6 py-4 text-slate-400 font-mono text-xs">{index + 1}</td>
                                                 <td className="px-6 py-4">
                                                     <span className="font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded border border-slate-200 group-hover:bg-blue-50 group-hover:text-blue-700 group-hover:border-blue-100 transition-colors">
                                                         {stock.symbol}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 font-medium text-slate-700">{stock.companyName}</td>
+                                                <td className="px-6 py-4 font-medium text-slate-700">
+                                                    <div className="flex items-center gap-2">
+                                                        {stock.companyName}
+                                                        <ExternalLink className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4">
                                                     <span className="text-xs text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
                                                         {stock.industry || '—'}
@@ -241,6 +260,19 @@ export function StockIndicesPage({ onNavigate }: StockIndicesPageProps) {
                     </Card>
                 </div>
             </div>
+
+            {/* Stock Chart Modal */}
+            {selectedStock && (
+                <StockChartModal
+                    open={showChartModal}
+                    onClose={() => setShowChartModal(false)}
+                    symbol={selectedStock.symbol}
+                    companyName={selectedStock.companyName}
+                    industry={selectedStock.industry}
+                    isin={selectedStock.isin}
+                    exchange={activeIndexData?.exchange || 'NSE'}
+                />
+            )}
         </div>
     );
 }
