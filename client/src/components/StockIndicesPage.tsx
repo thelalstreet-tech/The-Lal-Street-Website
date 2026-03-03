@@ -345,16 +345,6 @@ export function StockIndicesPage({ onNavigate }: StockIndicesPageProps) {
                                         </tbody>
                                     </table>
                                 </div>
-
-                                <div className="flex items-center justify-center gap-2 py-8 text-slate-400 text-xs">
-                                    <span>Powered by</span>
-                                    <div className="flex items-center gap-1.5 font-bold text-slate-600">
-                                        <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-                                            <TrendingUp className="w-3 h-3 text-white" />
-                                        </div>
-                                        TrueData
-                                    </div>
-                                </div>
                             </div>
                         ) : (
                             /* Breadcrumb Chart View */
